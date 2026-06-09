@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Bootstrap the Google Ads CLI: create venv, install deps, prepare .env.
+set -euo pipefail
+cd "$(dirname "$0")"
+
+PYTHON="${PYTHON:-python3}"
+
+echo "==> Creating virtual environment (.venv)"
+"$PYTHON" -m venv .venv
+# shellcheck disable=SC1091
+source .venv/bin/activate
+
+echo "==> Installing dependencies"
+pip install --quiet --upgrade pip
+pip install --quiet -r requirements.txt
+
+if [ ! -f .env ]; then
+  echo "==> Creating .env from .env.example (fill in your credentials)"
+  cp .env.example .env
+else
+  echo "==> .env already exists — leaving it untouched"
+fi
+
+echo ""
+echo "Done. Next steps:"
+echo "  1) Edit .env and fill in GOOGLE_ADS_DEVELOPER_TOKEN + GOOGLE_ADS_CLIENT_SECRET"
+echo "  2) ./run.sh auth          # generate a refresh token (opens browser)"
+echo "  3) ./run.sh accounts      # first live read"
