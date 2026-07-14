@@ -7,8 +7,16 @@ This phase is READ-ONLY (reporting + research). Write/mutate commands come later
 Auth model (OAuth2, configured via .env):
   developer_token + client_id + client_secret + refresh_token + login_customer_id
 
-Quota: Basic Access = 15000 operations/day. Reads can burn quota fast, so every
-read is tracked locally in .quota/ and warns as the daily cap approaches.
+Quota & rate limits (so the app never gets the account throttled/blocked):
+  - Daily operation quota: Basic Access = 15000 ops/day (reads + mutates
+    combined); Standard Access = effectively unlimited. A Search/SearchStream
+    request counts as 1 operation regardless of rows returned; each mutate op
+    counts as 1. We track ops locally per account/Pacific-day in .quota/ and
+    HARD-STOP before a call would exceed the cap (raise GOOGLE_ADS_DAILY_OP_CAP
+    for Standard Access).
+  - Per-second rate limits (QPS, metered per CID + developer token): the server
+    returns RESOURCE_EXHAUSTED / RESOURCE_TEMPORARILY_EXHAUSTED. We retry those
+    with exponential back-off (honouring Google's suggested retry delay).
 """
 from __future__ import annotations
 
@@ -17,6 +25,7 @@ import datetime as _dt
 import json
 import os
 import sys
+import time
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -161,21 +170,82 @@ def _track_ops(account: str | None, n: int) -> None:
         _err(f"⚠️  QUOTA: {used}/{cap} operations used today ({used / cap:.0%}).")
 
 
+def _quota_guard(account: str | None, n: int) -> None:
+    """Refuse BEFORE a call that would exceed the daily operation cap.
+
+    Basic Access = 15000 ops/day. Standard Access has no daily op limit — raise
+    GOOGLE_ADS_DAILY_OP_CAP (or set it very high) so this never blocks you.
+    """
+    if n <= 0:
+        return
+    cap = _quota_cap()
+    used = _quota_read(account)
+    if used + n > cap:
+        _die(f"QUOTA: {used}/{cap} operací dnes — dalších {n} by překročilo denní "
+             f"limit účtu '{(account or 'default')}'. Počkej na reset (půlnoc Pacific) "
+             f"nebo, pokud máš Standard Access (bez denního limitu), zvyš "
+             f"GOOGLE_ADS_DAILY_OP_CAP v .env.")
+
+
+def _rate_error_retry_after(ex) -> int | None:
+    """If the exception is a quota/rate-exhaustion error, return a retry delay in
+    seconds (Google's suggested delay when present, else 0 = use our back-off);
+    otherwise None (not a rate error → not retryable)."""
+    try:
+        for err in ex.failure.errors:
+            if err.error_code.quota_error:  # RESOURCE_EXHAUSTED / _TEMPORARILY_
+                qd = getattr(getattr(err, "details", None), "quota_error_details", None)
+                secs = getattr(getattr(qd, "retry_delay", None), "seconds", 0)
+                return int(secs) if secs else 0
+    except (AttributeError, ValueError):
+        pass
+    return None
+
+
+def _execute_with_retry(call, what: str):
+    """Run an API call, retrying on quota/rate exhaustion with exponential
+    back-off (honouring Google's suggested delay). Non-rate errors are reported
+    and abort, exactly as before."""
+    from google.ads.googleads.errors import GoogleAdsException
+
+    backoff = 5
+    for attempt in range(4):  # initial try + up to 3 retries
+        try:
+            return call()
+        except GoogleAdsException as ex:
+            retry_after = _rate_error_retry_after(ex)
+            if retry_after is None:
+                _report_google_ads_exception(ex)  # not a rate error → dies
+                return None
+            if attempt == 3:
+                _die(f"Rate limit ({what}) přetrvává i po 3 pokusech — končím, ať "
+                     f"účet nezatěžuju dál. Zkus to za chvíli.")
+            wait = retry_after or backoff
+            _err(f"⏳ Rate limit ({what}) — čekám {wait}s a zkouším znovu "
+                 f"(pokus {attempt + 1}/3)…")
+            time.sleep(wait)
+            backoff *= 2
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Query execution — returns rows, tracks quota by row count.
 # ---------------------------------------------------------------------------
 def _run_query(client, customer_id: str, gaql: str, account: str | None) -> list:
-    from google.ads.googleads.errors import GoogleAdsException
-
     service = client.get_service("GoogleAdsService")
-    rows: list = []
-    try:
+
+    # A Search/SearchStream request = 1 operation regardless of rows returned.
+    _quota_guard(account, 1)
+
+    def _call() -> list:
+        rows: list = []
         stream = service.search_stream(request={"customer_id": customer_id, "query": gaql})
         for batch in stream:
             rows.extend(batch.results)
-    except GoogleAdsException as ex:
-        _report_google_ads_exception(ex)
-    _track_ops(account, len(rows))
+        return rows
+
+    rows = _execute_with_retry(_call, what=f"query {customer_id}") or []
+    _track_ops(account, 1)  # 1 op per request — NOT per row
     return rows
 
 
@@ -237,6 +307,7 @@ def cmd_accounts(args: argparse.Namespace) -> None:
         resource_names = customer_service.list_accessible_customers().resource_names
     except Exception as ex:  # noqa: BLE001 — surface auth/setup errors clearly
         _die(str(ex))
+    _track_ops(args.account, 1)  # listAccessibleCustomers = 1 op
 
     seed = _env("GOOGLE_ADS_LOGIN_CUSTOMER_ID", args.account)
     accounts = []
@@ -397,11 +468,13 @@ def cmd_keywords_research(args: argparse.Namespace) -> None:
     seeds = [s.strip() for s in args.seed.split(",") if s.strip()]
     request.keyword_seed.keywords.extend(seeds)
 
-    from google.ads.googleads.errors import GoogleAdsException
-    try:
-        response = svc.generate_keyword_ideas(request=request)
-    except GoogleAdsException as ex:
-        _report_google_ads_exception(ex)
+    # GenerateKeywordIdeas is a non-Get/Mutate/Search call = 1 operation.
+    _quota_guard(args.account, 1)
+    response = _execute_with_retry(
+        lambda: svc.generate_keyword_ideas(request=request),
+        what=f"keyword-ideas {request.customer_id}",
+    )
+    if response is None:
         return
 
     ideas = []
@@ -414,8 +487,7 @@ def cmd_keywords_research(args: argparse.Namespace) -> None:
             "low_top_of_page_bid": _micros(m.low_top_of_page_bid_micros),
             "high_top_of_page_bid": _micros(m.high_top_of_page_bid_micros),
         })
-    # KeywordPlanIdeaService is a generate call — count results toward quota.
-    _track_ops(args.account, len(ideas))
+    _track_ops(args.account, 1)  # 1 op per generate request, not per idea
     ideas.sort(key=lambda k: k["avg_monthly_searches"], reverse=True)
     if args.limit:
         ideas = ideas[: args.limit]
@@ -479,7 +551,9 @@ def cmd_quota(args: argparse.Namespace) -> None:
     else:
         print(f"{data['account']} — {used:,}/{cap:,} ops today "
               f"({data['pct']}%), {data['remaining']:,} remaining")
-        print("Note: read ops are estimated by returned rows; exact counting verified against live API.")
+        print("Note: each Search/SearchStream request = 1 op, each mutate op = 1; "
+              "dry-runs aren't counted. Standard Access has no daily cap — raise "
+              "GOOGLE_ADS_DAILY_OP_CAP. For the authoritative number see Cloud Console.")
 
 
 # ===========================================================================
@@ -489,20 +563,22 @@ def cmd_quota(args: argparse.Namespace) -> None:
 def _run_mutation(client, account, customer_id, *, service_name, method_name,
                   request_type, operations, confirm):
     """Execute a mutate request. validate_only=True unless confirm is set."""
-    from google.ads.googleads.errors import GoogleAdsException
-
     service = client.get_service(service_name)
     request = client.get_type(request_type)
     request.customer_id = customer_id
     for op in operations:
         request.operations.append(op)
     request.validate_only = not confirm
-    try:
-        response = getattr(service, method_name)(request=request)
-    except GoogleAdsException as ex:
-        _report_google_ads_exception(ex)
-        return None
+
+    # Only real writes count toward quota (validate-only dry-runs don't).
     if confirm:
+        _quota_guard(account, len(operations))
+
+    response = _execute_with_retry(
+        lambda: getattr(service, method_name)(request=request),
+        what=f"{method_name} {customer_id}",
+    )
+    if response is not None and confirm:
         _track_ops(account, len(operations))
     return response
 
@@ -661,16 +737,16 @@ def cmd_campaign_create(args: argparse.Namespace) -> None:
     print(f"PLÁN: nová SEARCH kampaň '{args.name}' (PAUSED), "
           f"rozpočet {float(args.budget):,.0f} Kč/den, bidding {label}")
 
-    from google.ads.googleads.errors import GoogleAdsException
     service = client.get_service("GoogleAdsService")
     request = client.get_type("MutateGoogleAdsRequest")
     request.customer_id = cid
     request.mutate_operations.extend(ops)
     request.validate_only = not args.confirm
-    try:
-        resp = service.mutate(request=request)
-    except GoogleAdsException as ex:
-        _report_google_ads_exception(ex)
+    if args.confirm:
+        _quota_guard(args.account, len(ops))
+    resp = _execute_with_retry(lambda: service.mutate(request=request),
+                               what=f"campaign-create {cid}")
+    if resp is None:
         return
     if args.confirm:
         _track_ops(args.account, len(ops))
@@ -708,22 +784,52 @@ def cmd_ad_group_create(args: argparse.Namespace) -> None:
         _show_result(resp, args.confirm, f"ad group '{args.name}'")
 
 
+# Inline pin syntax: "AI First @H1" pins to HEADLINE_1; "text @D1" to DESCRIPTION_1.
+# Pinning to position 1 is how you keep your brand/domain always visible — the
+# fix for Limited Ad Serving "generic / unclear brand" flags.
+_PIN_MAP = {
+    "H1": "HEADLINE_1", "H2": "HEADLINE_2", "H3": "HEADLINE_3",
+    "D1": "DESCRIPTION_1", "D2": "DESCRIPTION_2",
+}
+
+
+def _split_pin(raw: str) -> tuple[str, str | None]:
+    """'AI First @H1' -> ('AI First', 'HEADLINE_1'); 'text' -> ('text', None)."""
+    s = raw.strip()
+    if " @" in s:
+        base, _, tag = s.rpartition(" @")
+        tag = tag.strip().upper()
+        if tag in _PIN_MAP:
+            return base.strip(), _PIN_MAP[tag]
+    return s, None
+
+
 def cmd_rsa_create(args: argparse.Namespace) -> None:
-    """Create a responsive search ad. Headlines/descriptions are pipe-separated."""
+    """Create a responsive search ad. Headlines/descriptions are pipe-separated.
+
+    Pin an asset with a trailing ` @H1`/`@H2`/`@H3` (headlines) or ` @D1`/`@D2`
+    (descriptions) — e.g. `AI First @H1` keeps the brand in position 1.
+    """
     client = _get_client(args.account)
     cid = _clean_id(args.customer_id)
-    headlines = [h.strip() for h in args.headlines.split("|") if h.strip()]
-    descriptions = [d.strip() for d in args.descriptions.split("|") if d.strip()]
+    headlines = [_split_pin(h) for h in args.headlines.split("|") if h.strip()]
+    descriptions = [_split_pin(d) for d in args.descriptions.split("|") if d.strip()]
     if not (3 <= len(headlines) <= 15):
         _die(f"RSA potřebuje 3–15 headlines (máš {len(headlines)}).")
     if not (2 <= len(descriptions) <= 4):
         _die(f"RSA potřebuje 2–4 descriptions (máš {len(descriptions)}).")
-    too_long_h = [h for h in headlines if len(h) > 30]
-    too_long_d = [d for d in descriptions if len(d) > 90]
+    too_long_h = [t for t, _ in headlines if len(t) > 30]
+    too_long_d = [t for t, _ in descriptions if len(t) > 90]
     if too_long_h:
         _die(f"Headlines max 30 znaků, překračují: {too_long_h}")
     if too_long_d:
         _die(f"Descriptions max 90 znaků, překračují: {too_long_d}")
+    bad_h = [t for t, p in headlines if p and not p.startswith("HEADLINE")]
+    bad_d = [t for t, p in descriptions if p and not p.startswith("DESCRIPTION")]
+    if bad_h:
+        _die(f"Headline lze připnout jen na H1/H2/H3: {bad_h}")
+    if bad_d:
+        _die(f"Description lze připnout jen na D1/D2: {bad_d}")
 
     ag_service = client.get_service("AdGroupService")
     op = client.get_type("AdGroupAdOperation")
@@ -731,21 +837,28 @@ def cmd_rsa_create(args: argparse.Namespace) -> None:
     aga.status = client.enums.AdGroupAdStatusEnum.ENABLED
     aga.ad_group = ag_service.ad_group_path(cid, args.ad_group)
     aga.ad.final_urls.append(args.final_url)
-    for h in headlines:
+    for text, pin in headlines:
         asset = client.get_type("AdTextAsset")
-        asset.text = h
+        asset.text = text
+        if pin:
+            asset.pinned_field = client.enums.ServedAssetFieldTypeEnum[pin]
         aga.ad.responsive_search_ad.headlines.append(asset)
-    for d in descriptions:
+    for text, pin in descriptions:
         asset = client.get_type("AdTextAsset")
-        asset.text = d
+        asset.text = text
+        if pin:
+            asset.pinned_field = client.enums.ServedAssetFieldTypeEnum[pin]
         aga.ad.responsive_search_ad.descriptions.append(asset)
     if args.path1:
         aga.ad.responsive_search_ad.path1 = args.path1
     if args.path2:
         aga.ad.responsive_search_ad.path2 = args.path2
 
+    pins = [f"{t}→{p}" for t, p in headlines + descriptions if p]
     print(f"PLÁN: nová RSA v ad group {args.ad_group} — "
           f"{len(headlines)} headlines, {len(descriptions)} descriptions, URL {args.final_url}")
+    if pins:
+        print(f"      připnuto: {', '.join(pins)}")
     resp = _run_mutation(client, args.account, cid,
                          service_name="AdGroupAdService", method_name="mutate_ad_group_ads",
                          request_type="MutateAdGroupAdsRequest", operations=[op], confirm=args.confirm)
@@ -1005,8 +1118,11 @@ def build_parser() -> argparse.ArgumentParser:
     sp = sub.add_parser("rsa-create", help="Create a responsive search ad [write]")
     sp.add_argument("customer_id")
     sp.add_argument("--ad-group", dest="ad_group", required=True, help="Ad group ID")
-    sp.add_argument("--headlines", required=True, help="Pipe-separated, 3–15 items, ≤30 chars each")
-    sp.add_argument("--descriptions", required=True, help="Pipe-separated, 2–4 items, ≤90 chars each")
+    sp.add_argument("--headlines", required=True,
+                    help="Pipe-separated, 3–15 items, ≤30 chars each. Pin with a trailing "
+                         "' @H1'/'@H2'/'@H3' (e.g. 'AI First @H1' keeps the brand in position 1).")
+    sp.add_argument("--descriptions", required=True,
+                    help="Pipe-separated, 2–4 items, ≤90 chars each. Pin with ' @D1'/'@D2'.")
     sp.add_argument("--final-url", dest="final_url", required=True)
     sp.add_argument("--path1")
     sp.add_argument("--path2")
