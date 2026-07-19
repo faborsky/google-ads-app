@@ -8,7 +8,7 @@ Pokrývá kompletní životní cyklus search kampaní — kampaně, sestavy, RSA
 
 ## 🆕 Co je nového
 
-Aktuální verze **2.0.0** — velký refresh: 19 → **85 příkazů** (pulse, assety, publika, cílení, shared sets, konverze, recommendations, change history, DSA, experimenty), balík `gads/`, preflight lint textů, policy kontroly, pojistka „PAUSED před REMOVED". Celá historie: **[CHANGELOG.md](CHANGELOG.md)**. Novinky odebírej přes GitHub: **Watch → Custom → Releases**.
+Aktuální verze **2.1.0** — vizuální podpis (ASCII banner jen pro lidi v terminálu). Předtím 2.0.0 — velký refresh: 19 → **85 příkazů** (pulse, assety, publika, cílení, shared sets, konverze, recommendations, change history, DSA, experimenty), balík `gads/`, preflight lint textů, policy kontroly, pojistka „PAUSED před REMOVED". Celá historie: **[CHANGELOG.md](CHANGELOG.md)**. Novinky odebírej přes GitHub: **Watch → Custom → Releases**.
 
 ## Dva způsoby, jak appku používat
 

@@ -73,7 +73,7 @@ Full API behaviour, quirks and limits: **[docs/api-notes.md](docs/api-notes.md)*
 
 ## Release checklist
 
-Bump `__version__` in `gads/__init__.py` → update README (version line + command tables), CLAUDE.md (command count/index), CHANGELOG.md (new `## [x.y.z] — YYYY-MM-DD` entry), bundled skill → run `python scripts/check_docs_consistency.py` (must pass) → commit → tag `vX.Y.Z`. (GitHub Release až po zveřejnění repa.)
+Bump `__version__` in `gads/__init__.py` → update README (version line + command tables), CLAUDE.md (command count/index), CHANGELOG.md (new `## [x.y.z] — YYYY-MM-DD` entry), bundled skill → run `python scripts/check_docs_consistency.py` (must pass) → commit → tag `vX.Y.Z`. (GitHub Release až po zveřejnění repa. Při zveřejnění přidat **MIT LICENSE** + sekci „Licence" do README — vzor og-refresh-app.)
 
 ## Documentation map
 

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+import os
+import sys
 
 from gads import __version__
 from gads.commands.account import cmd_accounts, cmd_api_limits, cmd_quota
@@ -547,12 +549,53 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
+
+# ---------------------------------------------------------------------------
+# Visual signature — humans only. Printed ONLY when stdout is a TTY and the
+# run isn't --json, so pipes, scripts and agent tool-calls always get clean,
+# token-free output.
+# ---------------------------------------------------------------------------
+
+_LETTER_G = [" ██████╗ ", "██╔════╝ ", "██║  ███╗", "██║   ██║", "╚██████╔╝", " ╚═════╝ "]
+_LETTER_A = [" █████╗ ", "██╔══██╗", "███████║", "██╔══██║", "██║  ██║", "╚═╝  ╚═╝"]
+_LETTER_D = ["██████╗ ", "██╔══██╗", "██║  ██║", "██║  ██║", "██████╔╝", "╚═════╝ "]
+_LETTER_S = ["███████╗", "██╔════╝", "███████╗", "╚════██║", "███████║", "╚══════╝"]
+
+
+def _print_banner() -> None:
+    if not sys.stdout.isatty() or "--json" in sys.argv:
+        return
+    use_color = "NO_COLOR" not in os.environ
+
+    def c(code: int) -> str:
+        return f"\033[38;5;{code}m" if use_color else ""
+
+    dim = "\033[2m" if use_color else ""
+    bold = "\033[1m" if use_color else ""
+    reset = "\033[0m" if use_color else ""
+    # Google brand colors: G blue, A red, D yellow, S green
+    letters = [(_LETTER_G, c(33)), (_LETTER_A, c(196)), (_LETTER_D, c(220)), (_LETTER_S, c(40))]
+    info = [
+        "",
+        f"{bold}Google Ads CLI{reset} v{__version__}",
+        f"{dim}search kampaně — GAQL reporting · RSA · dry-run zápisy{reset}",
+        f"{dim}./run.sh <příkaz> --help{reset}",
+        f"{dim}by Jindřich Fáborský · AIFirst.cz{reset}",
+        "",
+    ]
+    for row in range(6):
+        art = " ".join(f"{color}{glyphs[row]}{reset}" for glyphs, color in letters)
+        print(f"{art}   {info[row]}")
+    print()
+
+
 def main() -> None:
     try:  # don't traceback when piped into head/grep
         from signal import SIG_DFL, SIGPIPE, signal
         signal(SIGPIPE, SIG_DFL)
     except ImportError:  # SIGPIPE doesn't exist on Windows
         pass
+    _print_banner()
     parser = build_parser()
     args = parser.parse_args()
     args.func(args)

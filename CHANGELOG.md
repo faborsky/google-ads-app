@@ -2,6 +2,10 @@
 
 Verze aplikace je v `gads/__init__.py` (`__version__`, SemVer). Formát vychází z [Keep a Changelog](https://keepachangelog.com/). Datum je vydání dané verze.
 
+## [2.1.0] — 2026-07-19 — Vizuální podpis 🎨
+
+- **ASCII banner s barvami** („GADS" v Google barvách — modrá/červená/žlutá/zelená + verze, tagline a „by Jindřich Fáborský · AIFirst.cz") — vypíše se **jen člověku v terminálu** (stdout je TTY a neběží `--json`). Pipe, skripty a agentní tool-cally dostávají dál čistý výstup bez jediného znaku navíc. Respektuje `NO_COLOR`.
+
 ## [2.0.0] — 2026-07-19 — Velký refresh: 19 → 85 příkazů, balík, policy kontroly 🚀
 
 Kompletní přestavba podle gap analýzy aktuální dokumentace Google Ads API (v24, ověřeno 2026-07-19). Monolit `google_ads_cli.py` (1181 ř.) je nově balík `gads/` (engine `api.py`, `formatting`, `lint`, `commands/*` po doménách, `cli.py`); entrypoint zůstává, všech 19 původních příkazů funguje beze změny. Knihovna `google-ads` 31.1.0.
