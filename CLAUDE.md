@@ -1,59 +1,83 @@
-# Google Ads CLI — developer reference
+# Google Ads App — CLI for the Google Ads API
 
-Single-file Python CLI (`google_ads_cli.py`) using the official `google-ads`
-library, API version pinned to **v24**. Phase 1 is read-only.
+Python CLI for managing Google Ads **search** campaigns via the official `google-ads` library (API pinned to **v24**). Built to be driven by a human **and** by Claude Code: structured `--json` I/O, validate-only dry-runs by default, and a self-enforcing daily operation budget.
 
-## Conventions
-- Commands are `cmd_<name>(args)` functions wired in `build_parser()`; kebab-case
-  subcommand names. Global flags: `--account`, `--json`.
-- Auth is OAuth2 via `.env` → `_config_dict()` → `GoogleAdsClient.load_from_dict()`.
-  Secrets live ONLY in `.env` (gitignored). Never hardcode credentials.
-- Multi-account: env vars may carry an uppercase `_<NAME>` suffix; `_env()` resolves
-  the named variant first, falling back to the base var.
-- Money is in **micros** on the API (`_micros()` divides by 1e6). IDs may have
-  dashes in the UI; `_clean_id()` strips them.
+## Setup
 
-## Reads, quota & rate limits
-- All reads go through `_run_query()` (uses `search_stream`). **A Search/SearchStream
-  request = 1 operation regardless of rows** (confirmed against the API docs) — so
-  `_run_query` tracks `1` op, NOT `len(rows)`. Quota state is per account/day in `.quota/`.
-- Daily quota: Basic Access = 15,000 ops/day (reads + mutates combined); Standard Access
-  = effectively unlimited. Cap is `GOOGLE_ADS_DAILY_OP_CAP` (default 15,000) — raise it for
-  Standard Access tokens.
-- **Enforcement is a hard stop, not just a warning.** `_quota_guard(account, n)` runs
-  BEFORE each real call (reads: n=1; writes: n=len(ops), only when `--confirm`) and
-  `_die`s if it would exceed the cap — so a runaway loop can't blow the daily budget.
-  `_track_ops` still records usage and warns at 80%.
-- **Per-second rate limits (QPS)** are separate and metered per CID + developer token.
-  `_execute_with_retry()` wraps every read/mutate call: on `RESOURCE_EXHAUSTED` /
-  `RESOURCE_TEMPORARILY_EXHAUSTED` (`_rate_error_retry_after` detects `quota_error` and
-  reads Google's `retry_delay`) it backs off exponentially (5→10→20 s, or Google's
-  suggested delay) up to 3 retries, then aborts. Non-rate errors still report + exit.
-- The counter buckets by **Pacific date** via `_today()` (`GOOGLE_TZ = America/Los_Angeles`)
-  to match Google's quota reset — change `_today()` if Google ever changes the reset tz.
+```bash
+./run.sh <command> [flags]
+# or: source .venv/bin/activate && python google_ads_cli.py <command> [flags]
+```
 
-## Adding a command
-1. Write `cmd_<name>(args)` — build GAQL or a service request, call `_run_query()`
-   or the service, format both `--json` and human output.
-2. Register it in `build_parser()` with `set_defaults(func=cmd_<name>)`.
+## Code structure
 
-## Phase 2 (mutations) — design notes
-- Mutations = 1 op each. Use `mutate_*` service methods with operation objects
-  (`client.get_type("...Operation")`, `op.create`/`op.update`).
-- Every mutation command must: (a) print a plan, (b) require `--confirm`, (c) track
-  ops. Mirror the Sklik "plan before write" safety pattern.
-- Search-campaign build order: budget → campaign (SEARCH) → ad group → RSA → keywords
-  → geo/schedule criteria. RSA limits: 3–15 headlines (≤30 chars), 2–4 descriptions
-  (≤90 chars); optional pinning.
-- **Editing existing entities:** ads are mostly immutable. `ad-update-url` updates Final
-  URL in place via `AdService.mutate_ads` (URL fields ARE mutable; text assets are NOT).
-  To change ad text: `rsa-create` new + `ad-status … removed` old. **`ad-status removed`
-  uses `op.remove` — a status update to REMOVED silently no-ops** (don't "fix" it back).
-- `keyword-remove` takes `adGroupId~criterionId` fragments and builds the criterion
-  resource name; `ad-status` builds `adGroupAds/{adGroupId}~{adId}` for the ad-group-ad.
+The implementation is a package under `gads/`; `google_ads_cli.py` is a thin entrypoint.
 
-## Key references (Google Ads API docs)
-- Account hierarchy: `customer_client` GAQL + `CustomerService.list_accessible_customers`
-- Reporting: `GoogleAdsService.search_stream` with GAQL
-- Keyword research: `KeywordPlanIdeaService.generate_keyword_ideas`
-- Search campaign creation: docs/campaigns/search-campaigns/getting-started
+- `gads/api.py` — **engine**: `.env` config + multi-account resolution (`_env` suffixes), client factory (API version pin), the **daily quota guard** (`.quota/`, Pacific-date bucketing, hard stop BEFORE the cap), QPS retry with back-off (`_execute_with_retry`), `_run_query` (search_stream, 1 op/request), `_run_mutation` (validate-only default), `_require_paused_before_remove` (the no-undelete brake).
+- `gads/formatting.py` — micros⇄CZK, JSON output, `_die`/`_err`, `_row_to_dict`.
+- `gads/lint.py` — **preflight lint**: RSA/asset text limits (hard fail) + editorial-policy style checks (warnings) BEFORE any API call.
+- `gads/commands/*.py` — one module per domain (`account`, `pulse`, `reporting`, `research`, `campaigns`, `groups`, `ads`, `keywords`, `budgets`, `targeting`, `assets`, `audiences`, `sharedsets`, `labels`, `conversions`, `recommendations`, `dsa`, `pmax`, `experiments`, `auth`).
+- `gads/cli.py` — argparse wiring via `_cmd()` (one call = parser + handler → parity by construction).
+
+No shared mutable module state — commands take everything from `args`; quota state lives in `.quota/` files. `BASE_DIR` in `api.py` resolves to the repo root so `.env` and `.quota/` stay put.
+
+## Authentication & accounts
+
+OAuth2 via `.env`: developer token + OAuth client id/secret + refresh token + MCC `login_customer_id`. Multi-account via env suffixes (`GOOGLE_ADS_REFRESH_TOKEN_<NAME>` → `--account <name>`); `_env()` resolves named variant first. Target customer ID is a positional arg (dashes stripped by `_clean_id`). Money is **micros** on the API (`_micros`/`_to_micros` convert).
+
+## Commands (85, grouped)
+
+**Full flag reference + examples: [README.md](README.md).** Index:
+
+- **Setup/account:** `auth`, `accounts`, `quota`, `api-limits`
+- **Overview:** `pulse` (5-op account digest: totals+deltas+movers+opt score+recommendations+policy problems — run FIRST for any review)
+- **Reporting:** `query`, `report`, `changes` (`--sweep`)
+- **Campaigns:** `campaigns`, `campaign-create` (PAUSED, geo+language defaults), `campaign-status`, `bidding-set`, `campaign-targeting`
+- **Budgets:** `budgets`, `budget-set`, `budget-create` (shared), `budget-assign`, `budget-remove`
+- **Groups/ads:** `ad-groups`, `ad-group-create`, `ads`, `rsa-create` (lint + ` @H1` pinning), `ad-status`, `ad-update-url`, `ad-policy`
+- **Keywords:** `keywords`, `keyword-add`, `keyword-remove`, `negative-add`
+- **Shared sets:** `shared-sets`, `shared-set-create/add/keywords/remove-keywords/attach/remove`, `customer-negatives-attach/detach`
+- **Assets:** `assets`, `asset-links`, `sitelink-create`, `callout-create`, `snippet-create`, `asset-link`, `asset-unlink`
+- **Audiences:** `audiences`, `audience-create`, `audiences-attached`, `audience-attach` (`--mode`), `audience-exclude`, `audience-detach`
+- **Targeting:** `geo-suggest`, `geo-target`, `language-target`, `schedule-set`, `device-bid`, `demographics`, `demographic-target`
+- **Conversions:** `conversions`, `conversion-create`, `conversion-update`
+- **Recommendations:** `recommendations`, `recommendation-apply`, `recommendation-dismiss`
+- **Research:** `keywords-research` (1 QPS!), `search-terms`
+- **Labels:** `labels`, `label-create`, `label-assign`, `label-unassign`, `label-remove`
+- **DSA:** `dsa-setting`, `dsa-ad-group-create`, `dsa-create`, `webpage-targets`, `webpage-target-add`, `webpage-target-remove`
+- **PMax (reporting only):** `pmax`, `pmax-search-terms`
+- **Experiments:** `experiments`, `experiment-create`, `experiment-schedule`, `experiment-results`, `experiment-end`, `experiment-promote`
+
+## Safety
+
+- **Every mutation defaults to `validate_only` dry-run** + printed plan; `--confirm` writes. Dry-runs don't count toward quota.
+- **Quota guard is a hard stop, not a warning**: `_quota_guard` runs BEFORE each real call and dies if it would exceed `GOOGLE_ADS_DAILY_OP_CAP` (default 15 000 = Basic Access; Search/SearchStream request = 1 op regardless of rows). Counter buckets by **Pacific date** (Google's reset). `_track_ops` records + warns at 80 %.
+- **QPS retry**: `RESOURCE_EXHAUSTED`/`_TEMPORARILY_` → back-off 5→10→20 s (honours Google's `retry_delay`), max 3 retries, then abort. Never loop-retry manually on top.
+- **Preflight lint** (`gads/lint.py`) blocks count/length violations and warns on editorial-policy style issues before any API call.
+- Parse programmatic output with `--json`.
+
+## ⚠️ Critical for automation (read before scripting writes)
+
+- **REMOVED is PERMANENT** — no undelete in Google Ads. The CLI refuses to remove non-PAUSED campaigns/ads (`--force` overrides). REMOVED entities stay in API listings forever (default filters hide them).
+- **Ad text is immutable** — only Final URL updates in place (`ad-update-url`). Text change = `rsa-create` new + `ad-status … removed` old. A status *update* to REMOVED silently no-ops (the CLI uses a remove operation — don't "fix" it back). `AdGroupAdService` silently ignores non-status fields on update — no error, just a no-op.
+- **Assets are create-only** — no edit/delete, only link management (`asset-link`/`asset-unlink`). Duplicates silently merge.
+- **A campaign without geo/language criteria serves WORLDWIDE** — `campaign-create` sets CZ+cs defaults; verify with `campaign-targeting`.
+- **Positive audience criteria**: campaign XOR ad-group level (not both); `--mode targeting` NARROWS serving, `observation` doesn't.
+- **`changes`** requires date window (event ≤30 d, sweep ≤90 d) + LIMIT ≤10k — CLI enforces.
+- **Recommendations' resource names go stale daily** — list and apply/dismiss in one session. Apply/dismiss have NO validate_only (dry-run = plan only).
+- **GAQL**: no `LAST_90_DAYS` literal (use BETWEEN); `--json` rows are camelCase (`MessageToDict`).
+- **`metrics.conversions` = primary actions only**; `all_conversions` = everything. `pulse` warns when primary is 0 but all isn't (measurement misconfig).
+- **Keyword Planner = 1 QPS** — sequential requests only.
+
+Full API behaviour, quirks and limits: **[docs/api-notes.md](docs/api-notes.md)**.
+
+## Release checklist
+
+Bump `__version__` in `gads/__init__.py` → update README (version line + command tables), CLAUDE.md (command count/index), CHANGELOG.md (new `## [x.y.z] — YYYY-MM-DD` entry), bundled skill → run `python scripts/check_docs_consistency.py` (must pass) → commit → tag `vX.Y.Z`. (GitHub Release až po zveřejnění repa.)
+
+## Documentation map
+
+- **[README.md](README.md)** — full command reference, flags, auth walkthrough, worked examples (Czech).
+- **[docs/api-notes.md](docs/api-notes.md)** — how the Google Ads API actually behaves (versions, quotas, immutability, quirks).
+- **[CHANGELOG.md](CHANGELOG.md)** — version history.
+- **`skill/google-ads/`** — the bundled Claude Code skill (`/google-ads`): scenarios, safety rules, RSA/structure references. Install: `skill/INSTALL.md`.
