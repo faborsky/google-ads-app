@@ -67,13 +67,19 @@ from gads.api import DEFAULT_GEO_TARGET_ID, DEFAULT_LANGUAGE_ID
 
 def _cmd(sub, name: str, func, help: str, *, cid: bool = True, write: bool = False):
     """Add a subcommand: positional customer_id (unless cid=False) and, for
-    writes, --confirm (real write; default = validate-only dry-run)."""
+    writes, --confirm (real write; default = validate-only dry-run).
+
+    `--json` is accepted both before AND after the subcommand (the docs and
+    the bundled skill write it at the end). SUPPRESS keeps the subparser from
+    overwriting the global value with its own default."""
     sp = sub.add_parser(name, help=help + (" [write]" if write else ""))
     if cid:
         sp.add_argument("customer_id", help="Customer ID (with or without dashes)")
     if write:
         sp.add_argument("--confirm", action="store_true",
                         help="Actually write (default: dry-run/plan)")
+    sp.add_argument("--json", dest="json", action="store_true", default=argparse.SUPPRESS,
+                    help="Machine-readable JSON output")
     sp.set_defaults(func=func)
     return sp
 
@@ -92,7 +98,10 @@ def build_parser() -> argparse.ArgumentParser:
     sub = p.add_subparsers(dest="command", required=True)
 
     # --- Setup & account -------------------------------------------------
-    _cmd(sub, "auth", cmd_auth, "One-time OAuth flow → generate a refresh token", cid=False)
+    sp = _cmd(sub, "auth", cmd_auth,
+              "One-time OAuth flow → refresh token written into .env", cid=False)
+    sp.add_argument("--print", dest="print_token", action="store_true",
+                    help="Print the refresh token instead of writing it into .env")
     _cmd(sub, "accounts", cmd_accounts, "List accessible accounts under the MCC", cid=False)
     _cmd(sub, "quota", cmd_quota, "Today's local operation usage vs daily cap", cid=False)
     _cmd(sub, "api-limits", cmd_api_limits, "Documented API limits + local usage", cid=False)
@@ -518,6 +527,7 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--from", dest="date_from", required=True, help="YYYY-MM-DD")
     sp.add_argument("--to", dest="date_to", required=True, help="YYYY-MM-DD")
     sp.add_argument("--campaign", help="Filter by campaign ID")
+    sp.add_argument("--limit", type=int, help="Show only the top N by clicks (default: all)")
 
     # --- Experiments ------------------------------------------------------
     _cmd(sub, "experiments", cmd_experiments, "List experiments")
@@ -598,4 +608,8 @@ def main() -> None:
     _print_banner()
     parser = build_parser()
     args = parser.parse_args()
-    args.func(args)
+    try:
+        args.func(args)
+    except KeyboardInterrupt:
+        print("\nPřerušeno (Ctrl-C).", file=sys.stderr)
+        sys.exit(130)

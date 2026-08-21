@@ -5,7 +5,7 @@ import argparse
 
 from gads.api import (_clean_id, _execute_with_retry, _get_client,
                       _quota_guard, _run_query, _track_ops)
-from gads.formatting import _micros, _output_json, _row_to_dict
+from gads.formatting import _err, _micros, _output_json, _row_to_dict
 
 
 def cmd_keywords_research(args: argparse.Namespace) -> None:
@@ -50,8 +50,11 @@ def cmd_keywords_research(args: argparse.Namespace) -> None:
         })
     _track_ops(args.account, 1)  # 1 op per generate request, not per idea
     ideas.sort(key=lambda k: k["avg_monthly_searches"], reverse=True)
-    if args.limit:
+    total = len(ideas)
+    if args.limit and total > args.limit:
         ideas = ideas[: args.limit]
+        _err(f"(zobrazeno prvních {args.limit} z {total} nápadů podle hledanosti — "
+             f"zvyš --limit pro víc)")
 
     if args.json:
         _output_json(ideas)

@@ -2,14 +2,14 @@
 
 Tahle složka obsahuje **skill pro Claude Code**, který obaluje CLI aplikaci v tomhle repu a přidává pravidla práce s Google Ads (bezpečnostní zábradlí, RSA pravidla, struktura kampaní, scénáře). Po instalaci ho v Claude Code vyvoláš jako `/google-ads`.
 
-> Skill bez aplikace nefunguje — nejdřív zprovozni samotnou appku podle hlavního `README.md` (`./setup.sh` + přihlašovací údaje v `.env` + `./run.sh auth`).
+> Skill bez aplikace nefunguje — nejdřív zprovozni samotnou appku podle hlavního `README.md` (`./setup.sh` + přístupy v `.env` + `./run.sh auth`, který refresh token do `.env` zapíše sám).
 
 ## Předpoklady
 
 1. **Naklonovaný tenhle repozitář** a funkční appka (`./run.sh accounts` vrací tvoje účty).
 2. Nainstalovaný **Claude Code**.
 
-> Získání přístupů (developer token, OAuth client, refresh token) je u Google Ads složitější než u většiny API — krok za krokem to popisuje hlavní `README.md`. Všechny přístupy patří **výhradně do `.env`** (je v `.gitignore`) — nikdy do kódu, gitu ani chatu.
+> Získání přístupů (developer token + jeho přístupová úroveň, OAuth klient nebo service account, MCC ID) je u Google Ads složitější než u většiny API — krok za krokem to popisuje hlavní `README.md` → Autentizace. Všechny přístupy patří **výhradně do `.env`** (je v `.gitignore`) — nikdy do kódu, gitu ani chatu; ani Claudovi je neposílej, `auth` je uloží sám.
 
 ## Krok za krokem
 

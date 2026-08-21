@@ -24,7 +24,7 @@ If `<GADS_APP_DIR>` is still literally in this file, stop and ask the user for t
 
 ### Accounts
 
-Auth is OAuth2 from the app's `.env` (developer token + OAuth client + refresh token + MCC login customer id). The **customer ID is a positional argument** on most commands (with or without dashes). `accounts` lists everything under the MCC. `--account <name>` selects a named env profile (alternate login) — global flag, before the subcommand.
+Auth comes from the app's `.env` (developer token + MCC login customer id + either an OAuth refresh token or a service-account key file). The **customer ID is a positional argument** on most commands (with or without dashes). `accounts` lists the whole MCC hierarchy. `--account <name>` selects a named env profile (alternate login) — global flag, before the subcommand. If a command fails with `invalid_grant`, the refresh token expired — tell the user to run `<GADS_APP_DIR>/run.sh auth` (it writes the new token into `.env` itself; never ask them to paste tokens into the chat). `keywords-research` needs a developer token with **Basic Access** (the default Explorer Access blocks Keyword Planner) — if it fails with an authorization error, say so instead of retrying.
 
 ### Command map (85 commands — full flag reference: README.md in the app repo)
 
@@ -57,7 +57,7 @@ All read commands accept `--json` (use it when parsing). Money is in the account
 3. **New campaigns start PAUSED** — build everything (targeting, ads, assets, negatives), review, then `campaign-status --status enabled --confirm`.
 4. **REMOVED is PERMANENT — Google Ads has no undelete.** The CLI refuses to remove a non-PAUSED campaign/ad (pause → check → remove; `--force` only on explicit user request). Prefer PAUSED over REMOVED whenever the entity might come back.
 5. **Before re-enabling a paused campaign, ask WHY it's paused** — it may be intentional (seasonal windows, enrollment cohorts).
-6. **Respect API limits.** Daily quota: Basic Access = 15,000 ops/day (reads+mutates; Search/SearchStream request = 1 op regardless of rows). The CLI tracks ops locally and hard-stops before the cap; per-second rate errors auto-retry with back-off. Prefer `pulse` and targeted GAQL over broad pulls; run batches sequentially; Keyword Planner max 1 request/second. If you see a rate-limit message, do NOT relaunch in a loop.
+6. **Respect API limits.** Daily quota per developer token: Basic Access = 15,000 ops, Explorer Access = 2,880 — measured over a **sliding 24 h window** (reads + mutates; Search/SearchStream request = 1 op regardless of rows; dry-runs are counted too). The CLI tracks ops locally (`quota`) and hard-stops before the cap; per-second rate errors auto-retry with back-off. Prefer `pulse` and targeted GAQL over broad pulls; run batches sequentially; Keyword Planner max 1 request/second. If you see a rate-limit or QUOTA message, do NOT relaunch in a loop — report it and wait.
 7. **After creating/replacing ads, check approval.** Google reviews asynchronously (typically ≤1 business day) — schedule/perform an `ad-policy --only-problems` check afterwards.
 
 ## Google Ads gotchas (read before scripting writes)

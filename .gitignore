@@ -2,8 +2,13 @@
 .env.*
 !.env.example
 google-ads.yaml
+.secrets/
+*.json.key
 .venv/
+venv/
 __pycache__/
 *.pyc
+.pytest_cache/
 .quota/
 .session_cache_*.json
+.DS_Store

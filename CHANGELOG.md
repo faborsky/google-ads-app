@@ -2,6 +2,69 @@
 
 Verze aplikace je v `gads/__init__.py` (`__version__`, SemVer). Formát vychází z [Keep a Changelog](https://keepachangelog.com/). Datum je vydání dané verze.
 
+## [2.2.0] — 2026-08-21 — Audit před zveřejněním: v25, opravené tiché no-op updaty, klouzavá kvóta, testy 🛡️
+
+Kompletní kontrola appky proti aktuální dokumentaci Google Ads API (2026-08-21) a proti
+štábní kultuře sesterských appek (sklik-ppc-app, meta-ads-app) před otevřením repa.
+
+### Opraveno
+- **Tiché no-op updaty kvůli field masce.** `protobuf_helpers.field_mask` porovnává hodnoty
+  s výchozími, takže pole nastavené na default z masky vypadlo a API bez chyby nic neudělalo:
+  **`bidding-set --strategy max_conversions` / `max_conversion_value` bez cíle a `manual_cpc`
+  nikdy nepřepnuly bidding**, **`device-bid --modifier 0` (vypnout zařízení) nic nevypnul** u
+  existujícího kritéria a **`conversion-update --primary no` nechal akci primary**. Nová
+  presence-aware maska (`api._field_mask`, rekurzivně z `ListFields()`; prázdné bidding zprávy
+  jmenují subfield dle dokumentovaného workaroundu na `FIELD_HAS_SUBFIELDS`) + regresní testy.
+  Nalezeno offline testy proti proto typům, opravené cesty ověřeny živě přes validate_only.
+- **`pmax-search-terms` měl natvrdo `LIMIT 500`** — stejná třída chyby jako tiché usekávání
+  výpisů ve Sklik appce (1.9.0). Odstraněno; volitelný `--limit` výstup jen zkrátí a řekne to.
+  Audit všech ostatních výpisů: žádný jiný hardcoded LIMIT (search_stream vrací vše).
+- **`changes` upozorní na useknutí** — API tu LIMIT vyžaduje; když přijde přesně LIMIT řádků,
+  CLI varuje (zvyš `--limit` / zkrať `--days`). `keywords-research --limit` říká „prvních N z M".
+- **`--json` za názvem příkazu** (`./run.sh pulse <cid> --json`) končilo `unrecognized arguments`
+  — README i skill ho tak přitom psaly. Teď funguje před i za příkazem.
+- **Čisté chyby místo tracebacků**: expirovaný/odvolaný refresh token (`invalid_grant` → „consent
+  screen v Testing vyprší po 7 dnech, spusť `auth`"), špatný OAuth klient, neschválený developer
+  token / Cloud projekt (`DEVELOPER_TOKEN_NOT_APPROVED`, `CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION`,
+  `USER_PERMISSION_DENIED`… s radou), síťové výpadky (`UNAVAILABLE` — u čtení retry, u zápisu
+  jasně „neopakuji, zápis mohl projít"), Ctrl-C.
+- `accounts` vypisuje **celou hierarchii MCC** (dřív jen první úroveň — účty pod sub-managery
+  chyběly); zavřené účty skryté.
+
+### Změněno
+- **API pin v24 → v25** (knihovna `google-ads` 31.4.0, podporuje v25.1). Breaking changes v25
+  se appky netýkají (ověřeno proti release notes); každá operace CLI je navíc ověřená offline
+  testy proti proto stubům v25. Python 3.10–3.14 (knihovna zatím nejede na 3.15).
+- **Kvóta se počítá klouzavě za 24 h** (tak ji měří Google — „sliding 24 hour period" v docs),
+  ne po pacifických dnech. `.quota/<account>.json` je log operací, `quota` ukazuje, za jak
+  dlouho nejstarší operace vypadne z okna. **validate_only dry-runy se počítají taky** —
+  Google výjimku nikde nedokumentuje, dřívější „dry-runy zdarma" bylo nepodložené; lokální
+  odhad je tak vždy ≥ realita.
+- **`./run.sh auth` zapisuje refresh token rovnou do `.env`** (atomicky, chmod 600, záloha
+  `.env.bak`) — token už neprochází terminálem ani chatem agenta. `--print` ho místo toho vypíše.
+  `setup.sh` nastavuje `.env` na 600.
+- `api-limits` nese verzi API, úrovně přístupu (Test/Explorer/Basic/Standard) a klouzavé okno.
+
+### Přidáno
+- **Service account** jako alternativní autentizace (`GOOGLE_ADS_JSON_KEY_FILE_PATH`, volitelně
+  `GOOGLE_ADS_IMPERSONATED_EMAIL`) — bez prohlížeče, bez 7denní expirace; pro crony a agenty.
+- **Offline testovací sada `tests/` (107 testů, pytest)** — reálný `GoogleAdsClient` na v25
+  stubech + recorder místo gRPC: každý zápisový příkaz staví operace proti skutečným typům API
+  (překlep v poli/enumu = červený test), dry-run default, pojistka PAUSED-před-REMOVED, klouzavá
+  kvóta, retry politika, masky, lint, zápis tokenu do `.env`, CLI bez přístupů. `requirements-dev.txt`.
+- **MIT LICENSE** + sekce Licence, Chyby a náměty, Testy, Struktura projektu, O kurzu a Windows v README.
+
+### Dokumentace
+- README → **Autentizace přepsaná podle aktuálních docs**: přístupové úrovně tokenu (nově dostáváš
+  typicky **Explorer Access** — produkce OK, 2 880 ops/den, **Keyword Planner zablokovaný** →
+  `keywords-research` až s Basic Access; review ~5 dní; brand verification Cloud projektu
+  volitelně zrychlí), OAuth consent screen **In production** (jinak 7denní expirace tokenu),
+  service account krok za krokem, testovací účty, jeden Cloud projekt = jeden developer token.
+- `docs/api-notes.md`: v25/v25.1, access levels, klouzavá kvóta, validate_only, service accounts,
+  field-mask past, CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION. CLAUDE.md: pravidla „presence-aware
+  maska" a „nikdy hardcoded LIMIT", release checklist s pytestem a GitHub Release. Skill: kvóta,
+  Keyword Planner vyžaduje Basic Access.
+
 ## [2.1.0] — 2026-07-19 — Vizuální podpis 🎨
 
 - **ASCII banner s barvami** („GADS" v Google barvách — modrá/červená/žlutá/zelená + verze, tagline a „by Jindřich Fáborský · AIFirst.cz") — vypíše se **jen člověku v terminálu** (stdout je TTY a neběží `--json`). Pipe, skripty a agentní tool-cally dostávají dál čistý výstup bez jediného znaku navíc. Respektuje `NO_COLOR`.

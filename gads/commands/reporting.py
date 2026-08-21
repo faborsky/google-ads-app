@@ -117,6 +117,11 @@ def cmd_changes(args: argparse.Namespace) -> None:
         """
     rows = _run_query(client, cid, gaql, args.account)
     out = [_row_to_dict(r) for r in rows]
+    if len(out) >= limit:
+        # The API REQUIRES a LIMIT here, so truncation is possible — say so
+        # instead of silently returning a partial history.
+        _err(f"⚠️  Vráceno přesně {limit} řádků = LIMIT — historie je nejspíš useknutá. "
+             f"Zvyš --limit (max 10000) nebo zkrať --days.")
     if args.json:
         _output_json(out)
         return

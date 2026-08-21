@@ -10,7 +10,7 @@ from __future__ import annotations
 import argparse
 
 from gads.api import _clean_id, _get_client, _run_query
-from gads.formatting import _micros, _output_json
+from gads.formatting import _err, _micros, _output_json
 
 
 def cmd_pmax(args: argparse.Namespace) -> None:
@@ -64,13 +64,14 @@ def cmd_pmax_search_terms(args: argparse.Namespace) -> None:
     where = f"WHERE segments.date BETWEEN '{args.date_from}' AND '{args.date_to}'"
     if args.campaign:
         where += f" AND campaign.id = {args.campaign}"
+    # No hardcoded LIMIT: search_stream returns the whole set; --limit only
+    # trims the output (and says so) — never a silent truncation.
     gaql = f"""
         SELECT campaign.name, campaign_search_term_view.search_term,
                metrics.impressions, metrics.clicks, metrics.conversions
         FROM campaign_search_term_view
         {where}
         ORDER BY metrics.clicks DESC
-        LIMIT 500
     """
     rows = _run_query(client, cid, gaql, args.account)
     out = [{
@@ -80,6 +81,10 @@ def cmd_pmax_search_terms(args: argparse.Namespace) -> None:
         "clicks": r.metrics.clicks,
         "conversions": round(r.metrics.conversions, 1),
     } for r in rows]
+    total = len(out)
+    if args.limit and total > args.limit:
+        out = out[: args.limit]
+        _err(f"(zobrazeno prvních {args.limit} z {total} search terms — bez --limit dostaneš vše)")
     if args.json:
         _output_json(out)
         return

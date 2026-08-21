@@ -2,7 +2,7 @@
 
 ## Responsive Search Ads (RSA)
 
-Limits from Google's official Search asset specifications (verified 2026-07, API v24). The CLI's `rsa-create` enforces the hard limits client-side (preflight lint) and the API's validate-only dry-run is the final arbiter.
+Limits from Google's official Search asset specifications (verified 2026-08, API v25). The CLI's `rsa-create` enforces the hard limits client-side (preflight lint) and the API's validate-only dry-run is the final arbiter.
 
 | Asset | Char limit | Quantity | CLI guard |
 |---|---|---|---|
