@@ -104,9 +104,9 @@ def cmd_asset_links(args: argparse.Namespace) -> None:
     if not out:
         print("Žádné napojené assety (sitelink/callout/snippet).")
         return
-    for l in out:
-        target = (l.get("campaign") or l.get("ad_group") or "účet")
-        print(f"asset {l['asset_id']:>13}  {l['field_type']:<20} {l['level']:<9} {target}")
+    for link in out:
+        target = (link.get("campaign") or link.get("ad_group") or "účet")
+        print(f"asset {link['asset_id']:>13}  {link['field_type']:<20} {link['level']:<9} {target}")
 
 
 def cmd_sitelink_create(args: argparse.Namespace) -> None:

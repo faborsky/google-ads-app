@@ -496,7 +496,7 @@ def _require_paused_before_remove(client, account, customer_id: str, *,
     # walk to the status field of the first selected resource
     resource = gaql.split("FROM")[1].split()[0].strip()
     attr = {"ad_group_ad": "ad_group_ad"}.get(resource, resource)
-    status = getattr(getattr(row, attr), "status").name
+    status = getattr(row, attr).status.name
     if status != "PAUSED":
         _die(f"POJISTKA: {entity_label} má status {status}, ne PAUSED. REMOVED je "
              f"v Google Ads TRVALÉ (žádné obnovení). Nejdřív pauzni "

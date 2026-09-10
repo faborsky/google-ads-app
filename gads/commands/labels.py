@@ -32,9 +32,9 @@ def cmd_labels(args: argparse.Namespace) -> None:
     if not out:
         print("Žádné štítky.")
         return
-    for l in out:
-        desc = f"  — {l['description']}" if l["description"] else ""
-        print(f"{l['id']:>13}  {l['name']}{desc}")
+    for label in out:
+        desc = f"  — {label['description']}" if label["description"] else ""
+        print(f"{label['id']:>13}  {label['name']}{desc}")
 
 
 def cmd_label_create(args: argparse.Namespace) -> None:

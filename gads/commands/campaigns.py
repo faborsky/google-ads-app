@@ -163,7 +163,7 @@ def cmd_campaign_create(args: argparse.Namespace) -> None:
     ops.append(mo_campaign)
 
     geo_ids = [g.strip() for g in (args.geo or "").split(",") if g.strip()]
-    lang_ids = [l.strip() for l in (args.language or "").split(",") if l.strip()]
+    lang_ids = [lang.strip() for lang in (args.language or "").split(",") if lang.strip()]
     for gid in geo_ids:
         mo = client.get_type("MutateOperation")
         cc = mo.campaign_criterion_operation.create

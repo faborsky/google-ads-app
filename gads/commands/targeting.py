@@ -192,7 +192,7 @@ def cmd_language_target(args: argparse.Namespace) -> None:
     campaign_rn = c_service.campaign_path(cid, args.campaign_id)
 
     ops, plan = [], []
-    for lid in [l.strip() for l in (args.language or "").split(",") if l.strip()]:
+    for lid in [lang.strip() for lang in (args.language or "").split(",") if lang.strip()]:
         op = client.get_type("CampaignCriterionOperation")
         cc = op.create
         cc.campaign = campaign_rn

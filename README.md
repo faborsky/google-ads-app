@@ -4,7 +4,12 @@ CLI aplikace pro správu **search kampaní na Google Ads** přes oficiální [Go
 
 Pokrývá kompletní životní cyklus search kampaní — kampaně, sestavy, RSA inzeráty, klíčová slova, negativa (vč. sdílených seznamů), assety (sitelinky/callouts/snippety), publika a remarketing, cílení (geo/jazyk/rozvrh/zařízení/demografie), rozpočty, Smart Bidding, konverzní akce, doporučení Googlu, kontrolu schválení inzerátů, change history, experimenty a GAQL reporting. Display/YouTube/Shopping neřeší; Performance Max jen reportuje.
 
-> 🎓 **Tahle appka je doprovodný materiál ke kurzu [AI First](https://aifirst.cz).** Ukazuju na ní marketérům, jak si vibe codingem postavit vlastní nástroj, který za vás dělá rutinu (tady správu Google Ads z Claude Code) a šetří hodiny času. Součástí repa je i [skill pro Claude Code](#skill-pro-claude-code-google-ads), který appku obaluje. Chceš se to naučit prakticky? → **[aifirst.cz](https://aifirst.cz)**
+> [!TIP]
+> **Appka je zdarma a je tvoje.** Naklonuj si ji, používej ji, přestav si ji po svém.
+>
+> Nevíš, jak ji rozjet? Nebo chceš AI v marketingu používat systematicky: řídit z jednoho místa všechny kanály, automatizovat rutinu, postavit si vlastní znalostní bázi a vibe codovat si nástroje na míru své firmě? To učím v kurzu **[AI First](https://aifirst.cz)**. Tahle appka je v něm vysvětlená i s tím, jak si postavit vlastní.
+
+Konkrétně je doprovodným materiálem k 7. lekci kurzu. Součástí repa je i [skill pro Claude Code](#skill-pro-claude-code-google-ads), který appku obaluje.
 
 ## 🆕 Co je nového
 
@@ -434,11 +439,14 @@ google-ads-app/
 
 ## O kurzu AI First
 
-Tahle appka vznikla jako ukázka do kurzu **[AI First](https://aifirst.cz)** — praktického videokurzu AI a vibe codingu pro marketéry, podnikatele a kohokoli s chutí tvořit. Kurz ukazuje, jak vibe coding zapojit do **každodenní marketingové práce**: postavit si vlastní nástroje na míru, automatizovat rutinu, ušetřit hodiny času a zvednout efektivitu — bez programátora.
+**[AI First](https://aifirst.cz)** je praktický videokurz AI a vibe codingu pro marketéry, podnikatele a kohokoli s chutí tvořit.
 
-> *„Nechte AI dělat práci, kterou musíte, ať můžete dělat práci, kterou chcete."*
+Sedmá lekce ukazuje, jak vibe coding zapojit do **každodenní marketingové práce**: postavit si vlastní nástroje na míru, automatizovat rutinu a ušetřit hodiny času. Bez programátora.
 
-- 🚀 Reálná praxe — stavíš věci, které opravdu používáš (jako tenhle nástroj)
+> *„Nechte AI dělat práci, kterou musíte, ať můžete dělat práci, kterou chcete.“*
+
+- 🎬 18,5 hodiny praktických videí, 10 lekcí
+- 🚀 Reálná praxe: stavíš věci, které opravdu používáš (jako tenhle nástroj)
 - ⏱️ Důraz na úsporu času a efektivitu v běžné práci
 - 👉 **[aifirst.cz](https://aifirst.cz)**
 
