@@ -26,7 +26,7 @@ No shared mutable module state — commands take everything from `args`; quota s
 ## Authentication & accounts
 
 Two modes, both from `.env` (see README → Autentizace for the walkthrough):
-- **Installed-app OAuth2**: developer token + OAuth client id/secret + refresh token + MCC `login_customer_id`. `./run.sh auth` runs the browser flow and **writes the refresh token into `.env`** (atomic, 600; `--print` to show instead). OAuth consent screen must be **In production** — in Testing mode refresh tokens expire after 7 days (`invalid_grant`).
+- **Installed-app OAuth2**: developer token + OAuth client id/secret + refresh token + MCC `login_customer_id`. `./run.sh auth` runs the browser flow and **writes the refresh token into `.env`** (atomic, 600; `--print` to show instead). OAuth consent screen must be **In production** — in Testing mode refresh tokens expire after 7 days (`invalid_grant`). The consent screen now lives under **Google Auth Platform** (`console.cloud.google.com/auth/audience` for publishing status, `/auth/clients` for the Desktop-app client), not the old "APIs & Services → OAuth consent screen" path.
 - **Service account**: `GOOGLE_ADS_JSON_KEY_FILE_PATH` (+ optional `GOOGLE_ADS_IMPERSONATED_EMAIL`); the SA e-mail is added as a user of the Google Ads/MCC account. No browser, no expiry — preferred for automations. The library picks the flow by which keys are PRESENT, so `_config_dict` omits the unused trio.
 
 Multi-account via env suffixes (`GOOGLE_ADS_REFRESH_TOKEN_<NAME>` → `--account <name>`); `_env()` resolves named variant first. Target customer ID is a positional arg (dashes stripped by `_clean_id`). Money is **micros** on the API (`_micros`/`_to_micros` convert).

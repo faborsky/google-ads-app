@@ -57,14 +57,31 @@ Google Ads API je na přístupy nejpřísnější z velkých reklamních API: po
 
 ### Přehled: co všechno do `.env`
 
-| Proměnná | Co to je | Kde vzít |
-|---|---|---|
-| `GOOGLE_ADS_DEVELOPER_TOKEN` | 22znakový token tvého **manager (MCC) účtu** | Google Ads MCC → Tools → **API Center** (krok 1) |
-| `GOOGLE_ADS_CLIENT_ID` + `GOOGLE_ADS_CLIENT_SECRET` | OAuth klient (Desktop app) | Google Cloud Console (krok 2) |
-| `GOOGLE_ADS_REFRESH_TOKEN` | dlouhodobý token pro tvůj Google účet | `./run.sh auth` (krok 3) |
-| `GOOGLE_ADS_LOGIN_CUSTOMER_ID` | ID MCC **bez pomlček** | hlavička Google Ads (krok 4) |
+Tři hodnoty vyplníš ručně, čtvrtou si appka zapíše sama a **jedno číslo do `.env` vůbec nepatří**:
+
+| Proměnná | Co to je | Kde vzít | Jak se tam dostane |
+|---|---|---|---|
+| `GOOGLE_ADS_DEVELOPER_TOKEN` | 22znakový token tvého **manager (MCC) účtu** | Google Ads MCC → Tools → **API Center** (krok 1) | zkopíruješ ručně |
+| `GOOGLE_ADS_CLIENT_ID` | OAuth klient, končí `.apps.googleusercontent.com` | Google Cloud Console (krok 2) | zkopíruješ ručně |
+| `GOOGLE_ADS_CLIENT_SECRET` | heslo toho OAuth klienta | Google Cloud Console (krok 2) | zkopíruješ ručně |
+| `GOOGLE_ADS_REFRESH_TOKEN` | dlouhodobý přístup k tvému Google účtu | `./run.sh auth` (krok 3) | **zapíše se samo**, nikam ho nekopíruješ |
+| `GOOGLE_ADS_LOGIN_CUSTOMER_ID` | ID MCC **bez pomlček** (`123-456-7890` → `1234567890`) | hlavička Google Ads (krok 4) | zkopíruješ ručně |
+| `GOOGLE_ADS_DAILY_OP_CAP` | strop operací za 24 h | podle úrovně tokenu (krok 1) | `15000` (Basic) / `2880` (Explorer) |
+| — | **customer ID cílového účtu**, se kterým pracuješ | `./run.sh accounts` | **do `.env` nepatří** — je to argument příkazu |
+
+Tři čísla, která se snadno pletou: **Client ID** (dlouhý řetězec z Cloudu) × **MCC login customer ID** (10 číslic, do `.env`) × **customer ID klientského účtu** (10 číslic, do příkazu).
 
 Alternativa ke kroku 2+3 bez prohlížeče: **service account** (níže).
+
+### 0) Passkey — udělej to dřív, než začneš
+
+Od **5. 8. 2026** chce Google při generování nového refresh tokenu (krok 3) ověření passkey. Existujících tokenů se to netýká.
+
+Podívej se na **[myaccount.google.com/signinoptions/passkeys](https://myaccount.google.com/signinoptions/passkeys)** (pozor, `g.co/passkeys` vede jen na marketingovou stránku) — Google je zakládá i sám (Android, iCloud Keychain, profil v Chrome), takže tam nejspíš nějakou máš a nemusíš nic dělat. Když ne, založ ji **hned teď, ještě před vším ostatním** — je to otázka půl minuty.
+
+Jediný případ, kdy to nejde vyřešit na počkání: nemáš-li na účtu žádnou jinou passkey, kterou by šla ta nová schválit, může ji Google až týden držet jako nedůvěryhodnou. Pak dokonči zbytek nastavení a `auth` spusť, až projde — nebo rovnou použij service account.
+
+Passkey není biometrie — bez čtečky otisků ji potvrdíš telefonem přes QR kód, heslem k počítači, PINem z Windows Hello nebo správcem hesel (Bitwarden, 1Password). Kdo to nechce řešit vůbec, jde cestou **service accountu** (níže) — ten je z požadavku vyjmutý.
 
 ### 1) Developer token + přístupová úroveň
 
@@ -83,10 +100,15 @@ Alternativa ke kroku 2+3 bez prohlížeče: **service account** (níže).
 
 ### 2) OAuth klient (Cloud Console)
 
-1. [console.cloud.google.com](https://console.cloud.google.com) → vytvoř/vyber projekt → **APIs & Services → Library** → povol **Google Ads API**. (Jeden Cloud projekt = jeden developer token.)
-2. **APIs & Services → OAuth consent screen** → typ External, vyplň název a kontakt, scope netřeba přidávat ručně. **Publishing status přepni na „In production"** — v režimu „Testing" Google **refresh tokeny zneplatňuje po 7 dnech** a musel/a bys `auth` opakovat každý týden. Appka zůstane „neověřená" (Google při přihlášení ukáže varování *Google hasn't verified this app* → *Advanced → Go to …*) — pro vlastní nástroj to je v pořádku, ověření není potřeba.
-3. **APIs & Services → Credentials → Create credentials → OAuth client ID → Desktop app**.
-4. → `GOOGLE_ADS_CLIENT_ID` + `GOOGLE_ADS_CLIENT_SECRET`
+Nastavení OAuth se v Cloud Console přesunulo pod **Google Auth Platform** — starší návody (i verze tohohle README do 2.2.0) posílají na „APIs & Services → OAuth consent screen", což už neexistuje. Aktuální cesty, ověřeno 28. 8. 2026:
+
+1. **Povol Google Ads API** v projektu: [console.cloud.google.com/apis/library/googleads.googleapis.com](https://console.cloud.google.com/apis/library/googleads.googleapis.com) → **Enable**. (Jeden Cloud projekt = jeden developer token.)
+2. **Branding** — [console.cloud.google.com/auth/branding](https://console.cloud.google.com/auth/branding): název aplikace (uvidíš ho na přihlašovací obrazovce), support e-mail, kontakt na vývojáře.
+3. **Audience** — [console.cloud.google.com/auth/audience](https://console.cloud.google.com/auth/audience): User type **External** a Publishing status přes **Publish app** na **In production**. V režimu „Testing" Google **refresh tokeny zneplatňuje po 7 dnech** a musel/a bys `auth` opakovat každý týden.
+4. **Clients** — [console.cloud.google.com/auth/clients](https://console.cloud.google.com/auth/clients) → **+ Create client** → Application type **Desktop app** → po vytvoření vyskočí obě hodnoty.
+5. → `GOOGLE_ADS_CLIENT_ID` + `GOOGLE_ADS_CLIENT_SECRET`
+
+Scopes ručně přidávat netřeba. Appka zůstane „neověřená" (Google při přihlášení ukáže *Google hasn't verified this app* → *Advanced → Go to …*) — pro vlastní nástroj je to v pořádku, ověřením procházet nemusíš.
 
 ### 3) Refresh token
 
