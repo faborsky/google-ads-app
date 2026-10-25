@@ -25,6 +25,6 @@ fi
 echo ""
 echo "Done. Next steps:"
 echo "  1) Edit .env: GOOGLE_ADS_DEVELOPER_TOKEN, GOOGLE_ADS_CLIENT_ID, GOOGLE_ADS_CLIENT_SECRET,"
-echo "     GOOGLE_ADS_LOGIN_CUSTOMER_ID (see README → Autentizace)"
+echo "     GOOGLE_ADS_LOGIN_CUSTOMER_ID (see README.md → Authentication)"
 echo "  2) ./run.sh auth          # OAuth in the browser → refresh token written into .env"
 echo "  3) ./run.sh accounts      # first live read"

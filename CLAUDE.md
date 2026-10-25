@@ -1,6 +1,6 @@
 # Google Ads App — CLI for the Google Ads API
 
-Python CLI for managing Google Ads **search** campaigns via the official `google-ads` library (API pinned to **v25**, library 31.4+). Version 2.2.0, 85 commands. Built to be driven by a human **and** by Claude Code: structured `--json` I/O, validate-only dry-runs by default, and a self-enforcing daily operation budget. Czech user docs in [README.md](README.md).
+Python CLI for managing Google Ads **search** campaigns via the official `google-ads` library (API pinned to **v25**, library 31.4+). Version 2.2.0, 85 commands. Built to be driven by a human **and** by Claude Code: structured `--json` I/O, validate-only dry-runs by default, and a self-enforcing daily operation budget. User docs in [README.md](README.md) (English) and [README.cs.md](README.cs.md) (Czech).
 
 ## Setup
 
@@ -25,7 +25,7 @@ No shared mutable module state — commands take everything from `args`; quota s
 
 ## Authentication & accounts
 
-Two modes, both from `.env` (see README → Autentizace for the walkthrough):
+Two modes, both from `.env` (see README → Authentication for the walkthrough):
 - **Installed-app OAuth2**: developer token + OAuth client id/secret + refresh token + MCC `login_customer_id`. `./run.sh auth` runs the browser flow and **writes the refresh token into `.env`** (atomic, 600; `--print` to show instead). OAuth consent screen must be **In production** — in Testing mode refresh tokens expire after 7 days (`invalid_grant`). The consent screen now lives under **Google Auth Platform** (`console.cloud.google.com/auth/audience` for publishing status, `/auth/clients` for the Desktop-app client), not the old "APIs & Services → OAuth consent screen" path.
 - **Service account**: `GOOGLE_ADS_JSON_KEY_FILE_PATH` (+ optional `GOOGLE_ADS_IMPERSONATED_EMAIL`); the SA e-mail is added as a user of the Google Ads/MCC account. No browser, no expiry — preferred for automations. The library picks the flow by which keys are PRESENT, so `_config_dict` omits the unused trio.
 
@@ -88,7 +88,11 @@ Bump `__version__` in `gads/__init__.py` → update README (version line + 🆕 
 
 ## Documentation map
 
-- **[README.md](README.md)** — full command reference, flags, auth walkthrough (access levels, OAuth vs service account), worked examples (Czech).
+- **[README.md](README.md)** — full command reference, flags, auth walkthrough (access levels, OAuth vs service account), worked examples (English; full Czech version in [README.cs.md](README.cs.md)).
 - **[docs/api-notes.md](docs/api-notes.md)** — how the Google Ads API actually behaves (versions, access levels, quotas, immutability, quirks).
 - **[CHANGELOG.md](CHANGELOG.md)** — version history.
 - **`skill/google-ads/`** — the bundled Claude Code skill (`/google-ads`): scenarios, safety rules, RSA/structure references. Install: `skill/INSTALL.md`.
+
+## README languages
+
+`README.md` = English, full, source of truth. `README.cs.md` = full Czech. `i18n/README.<lang>.md` = short versions (es, pt-BR, de, fr, zh-CN, ja, sv, nb, da). A README change updates both full versions in the same commit; `i18n/` only when the quick start, main features or name change. Author links: faborsky.com in EN/i18n, faborsky.cz + aifirst.cz in Czech.

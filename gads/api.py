@@ -101,7 +101,7 @@ def _config_dict(account: str | None) -> dict:
     if missing:
         _die(
             "Chybí přístupy v .env: " + ", ".join(m + suffix for m in missing)
-            + ".\n  Postup: README → Autentizace. Refresh token vygeneruje `./run.sh auth` "
+            + ".\n  Postup: README.cs.md → Autentizace. Refresh token vygeneruje `./run.sh auth` "
             "(zapíše ho do .env sám); alternativa bez prohlížeče = service account "
             "(GOOGLE_ADS_JSON_KEY_FILE_PATH)."
         )
@@ -135,7 +135,7 @@ def _get_client(account: str | None):
                  "odvolaný přístup, nebo token z jiného OAuth klienta.\n"
                  "  Oprava: `./run.sh auth` (vygeneruje nový token a zapíše ho do .env). "
                  "Dlouhodobá alternativa bez expirace: service account "
-                 "(GOOGLE_ADS_JSON_KEY_FILE_PATH — viz README).")
+                 "(GOOGLE_ADS_JSON_KEY_FILE_PATH — viz README.cs.md).")
         if "invalid_client" in detail or "unauthorized_client" in detail:
             _die("OAuth klient odmítnut (invalid_client/unauthorized_client) — zkontroluj "
                  "GOOGLE_ADS_CLIENT_ID a GOOGLE_ADS_CLIENT_SECRET v .env (typ klienta musí "
@@ -283,7 +283,7 @@ _AUTHZ_HINTS = {
         "Developer token má jen Test Account Access — na produkční účet nesmí. "
         "Požádej o Basic Access v API Center (Tools → API Center), nebo zkoušej na testovacím účtu."),
     "CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION": (
-        "Cloud projekt (OAuth klient) není schválený pro produkční účty — viz README → "
+        "Cloud projekt (OAuth klient) není schválený pro produkční účty — viz README.cs.md → "
         "Autentizace (přístupová úroveň tokenu a Cloud projekt)."),
     "DEVELOPER_TOKEN_PROHIBITED": (
         "Developer token je pro tento Cloud projekt zakázaný — každý Cloud projekt smí používat "
