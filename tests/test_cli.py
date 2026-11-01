@@ -91,3 +91,10 @@ def test_every_subcommand_help_renders():
     for cmd in commands:
         rr = _run(cmd, "--help")
         assert rr.returncode == 0, f"{cmd} --help failed: {rr.stderr}"
+
+
+def test_bidding_set_takes_strategy_or_portfolio_not_both():
+    r = _run("bidding-set", "123", "42", "--strategy", "target_roas", "--portfolio", "555")
+    assert r.returncode == 2 and "not allowed with" in r.stderr
+    r = _run("bidding-set", "123", "42")
+    assert r.returncode == 2 and "--strategy" in r.stderr and "--portfolio" in r.stderr

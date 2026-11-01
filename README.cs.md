@@ -222,6 +222,7 @@ GOOGLE_ADS_LOGIN_CUSTOMER_ID_KLIENTB=...
 | `campaign-create <cid> --name --budget [--bidding] [--target-cpa] [--target-roas] [--geo] [--language]` | Nová SEARCH kampaň + rozpočet + geo/jazyk atomicky, **startuje PAUSED** (výchozí cílení: ČR + čeština) |
 | `campaign-status <cid> <id> --status enabled\|paused\|removed [--force]` | Zapnout / pauznout / smazat (smazání jen z PAUSED!) |
 | `bidding-set <cid> <id> --strategy … [--target-cpa] [--target-roas]` | Bidding: `manual_cpc`, `max_conversions`, `max_conversion_value`, `target_cpa`, `target_roas` |
+| `bidding-set <cid> <id> --portfolio <bidding_strategy_id>` | Připojit kampaň k existující portfolio strategii (cíl se nastavuje na portfoliu) |
 | `campaign-targeting <cid> <id>` | Cílicí kritéria kampaně (geo/jazyk/rozvrh/zařízení/proximity) |
 
 ### Rozpočty

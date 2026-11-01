@@ -222,6 +222,7 @@ The **target account's customer ID** is a positional argument of most commands (
 | `campaign-create <cid> --name --budget [--bidding] [--target-cpa] [--target-roas] [--geo] [--language]` | New SEARCH campaign + budget + geo/language atomically, **starts PAUSED** (default targeting: Czech Republic + Czech) |
 | `campaign-status <cid> <id> --status enabled\|paused\|removed [--force]` | Enable / pause / delete (delete only from PAUSED!) |
 | `bidding-set <cid> <id> --strategy … [--target-cpa] [--target-roas]` | Bidding: `manual_cpc`, `max_conversions`, `max_conversion_value`, `target_cpa`, `target_roas` |
+| `bidding-set <cid> <id> --portfolio <bidding_strategy_id>` | Attach the campaign to an existing portfolio bidding strategy (the target is set on the portfolio) |
 | `campaign-targeting <cid> <id>` | Campaign targeting criteria (geo/language/schedule/device/proximity) |
 
 ### Budgets

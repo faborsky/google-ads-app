@@ -171,9 +171,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     sp = _cmd(sub, "bidding-set", cmd_bidding_set, "Switch a campaign's bidding strategy", write=True)
     sp.add_argument("campaign_id")
-    sp.add_argument("--strategy", required=True,
-                    choices=["manual_cpc", "max_conversions", "max_conversion_value",
-                             "target_cpa", "target_roas"])
+    which = sp.add_mutually_exclusive_group(required=True)
+    which.add_argument("--strategy",
+                       choices=["manual_cpc", "max_conversions", "max_conversion_value",
+                                "target_cpa", "target_roas"])
+    which.add_argument("--portfolio", metavar="BIDDING_STRATEGY_ID",
+                       help="Attach the campaign to an existing portfolio bidding strategy")
     sp.add_argument("--target-cpa", dest="target_cpa", type=float, help="Target CPA in CZK")
     sp.add_argument("--target-roas", dest="target_roas", type=float, help="Target ROAS (e.g. 2.5)")
 

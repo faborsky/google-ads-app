@@ -106,14 +106,26 @@ def _apply_bidding(client, campaign, strategy: str, target_cpa, target_roas) -> 
 
 
 def cmd_bidding_set(args: argparse.Namespace) -> None:
-    """Switch a campaign's bidding strategy."""
+    """Switch a campaign's bidding strategy: a standard one (--strategy) or an
+    existing portfolio strategy (--portfolio <bidding_strategy_id>)."""
     client = _get_client(args.account)
     cid = _clean_id(args.customer_id)
     service = client.get_service("CampaignService")
     op = client.get_type("CampaignOperation")
     campaign = op.update
     campaign.resource_name = service.campaign_path(cid, args.campaign_id)
-    label = _apply_bidding(client, campaign, args.strategy, args.target_cpa, args.target_roas)
+    portfolio = getattr(args, "portfolio", None)
+    if portfolio:
+        if args.target_cpa or args.target_roas:
+            _die("--portfolio nebere --target-cpa/--target-roas — cíl se nastavuje "
+                 "na portfolio strategii, ne na kampani")
+        # bidding_strategy is in the same oneof as the standard strategies,
+        # so setting it detaches the campaign from its current strategy.
+        bs_service = client.get_service("BiddingStrategyService")
+        campaign.bidding_strategy = bs_service.bidding_strategy_path(cid, _clean_id(portfolio))
+        label = f"portfolio strategie {_clean_id(portfolio)}"
+    else:
+        label = _apply_bidding(client, campaign, args.strategy, args.target_cpa, args.target_roas)
     client.copy_from(op.update_mask, _field_mask(client, campaign))
 
     print(f"PLÁN: kampaň {args.campaign_id} → bidding: {label}")

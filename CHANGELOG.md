@@ -2,6 +2,13 @@
 
 Verze aplikace je v `gads/__init__.py` (`__version__`, SemVer). Formát vychází z [Keep a Changelog](https://keepachangelog.com/). Datum je vydání dané verze.
 
+## [Unreleased]
+
+### Přidáno
+- **`bidding-set --portfolio <bidding_strategy_id>`** připojí kampaň k existující portfolio
+  bidding strategii (`campaign.bidding_strategy`). Vylučuje se s `--strategy`;
+  `--target-cpa`/`--target-roas` odmítne, protože cíl patří portfoliu, ne kampani.
+
 ## [2.2.0] — 2026-08-21 — Audit před zveřejněním: v25, opravené tiché no-op updaty, klouzavá kvóta, testy 🛡️
 
 Kompletní kontrola appky proti aktuální dokumentaci Google Ads API (2026-08-21) a proti

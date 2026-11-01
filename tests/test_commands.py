@@ -101,6 +101,23 @@ def test_bidding_set_target_roas(recorder):
     assert "target_roas.target_roas" in list(op.update_mask.paths)
 
 
+def test_bidding_set_portfolio_attaches_the_campaign(recorder):
+    campaigns.cmd_bidding_set(ns(campaign_id="42", strategy=None, portfolio="555",
+                                 target_cpa=None, target_roas=None))
+    op = _ops(recorder.last("mutate_campaigns"))[0]
+    assert op.update.bidding_strategy == f"customers/{CID}/biddingStrategies/555"
+    assert op.update._pb.WhichOneof("campaign_bidding_strategy") == "bidding_strategy"
+    assert "bidding_strategy" in list(op.update_mask.paths)
+
+
+def test_bidding_set_portfolio_refuses_a_campaign_level_target(recorder, capsys):
+    with pytest.raises(SystemExit):
+        campaigns.cmd_bidding_set(ns(campaign_id="42", strategy=None, portfolio="555",
+                                     target_cpa=None, target_roas=2.5))
+    assert "--portfolio" in capsys.readouterr().err
+    assert not recorder.calls
+
+
 def test_campaigns_listing_hides_removed_by_default(recorder):
     campaigns.cmd_campaigns(ns(status=None))
     q = recorder.last("search_stream")["request"]["query"]
