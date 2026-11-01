@@ -1,6 +1,6 @@
 # Google Ads App — CLI for the Google Ads API
 
-Python CLI for managing Google Ads **search** campaigns via the official `google-ads` library (API pinned to **v25**, library 31.4+). Version 2.2.0, 85 commands. Built to be driven by a human **and** by Claude Code: structured `--json` I/O, validate-only dry-runs by default, and a self-enforcing daily operation budget. User docs in [README.md](README.md) (English) and [README.cs.md](README.cs.md) (Czech).
+Python CLI for managing Google Ads **search** campaigns via the official `google-ads` library (API pinned to **v25**, library 35+). Version 2.3.0, 85 commands. Built to be driven by a human **and** by Claude Code: structured `--json` I/O, validate-only dry-runs by default, and a self-enforcing daily operation budget. User docs in [README.md](README.md) (English) and [README.cs.md](README.cs.md) (Czech).
 
 ## Setup
 
@@ -26,12 +26,12 @@ No shared mutable module state — commands take everything from `args`; quota s
 ## Authentication & accounts
 
 Two modes, both from `.env` (see README → Authentication for the walkthrough):
-- **Installed-app OAuth2**: developer token + OAuth client id/secret + refresh token + MCC `login_customer_id`. `./run.sh auth` runs the browser flow and **writes the refresh token into `.env`** (atomic, 600; `--print` to show instead). OAuth consent screen must be **In production** — in Testing mode refresh tokens expire after 7 days (`invalid_grant`). The consent screen now lives under **Google Auth Platform** (`console.cloud.google.com/auth/audience` for publishing status, `/auth/clients` for the Desktop-app client), not the old "APIs & Services → OAuth consent screen" path.
+- **Installed-app OAuth2**: OAuth client id/secret + refresh token + MCC `login_customer_id`. `./run.sh auth` runs the browser flow and **writes the refresh token into `.env`** (atomic, 600; `--print` to show instead). OAuth consent screen must be **In production** — in Testing mode refresh tokens expire after 7 days (`invalid_grant`). The consent screen now lives under **Google Auth Platform** (`console.cloud.google.com/auth/audience` for publishing status, `/auth/clients` for the Desktop-app client), not the old "APIs & Services → OAuth consent screen" path.
 - **Service account**: `GOOGLE_ADS_JSON_KEY_FILE_PATH` (+ optional `GOOGLE_ADS_IMPERSONATED_EMAIL`); the SA e-mail is added as a user of the Google Ads/MCC account. No browser, no expiry — preferred for automations. The library picks the flow by which keys are PRESENT, so `_config_dict` omits the unused trio.
 
 Multi-account via env suffixes (`GOOGLE_ADS_REFRESH_TOKEN_<NAME>` → `--account <name>`); `_env()` resolves named variant first. Target customer ID is a positional arg (dashes stripped by `_clean_id`). Money is **micros** on the API (`_micros`/`_to_micros` convert).
 
-Developer-token access levels matter: **Explorer Access** (the usual default after sign-up) serves production accounts with 2 880 ops/day but **blocks KeywordPlanIdeaService** (`keywords-research` fails until Basic Access); **Basic Access** = 15 000 ops/day, everything.
+**Developer tokens were sunset 2026-09-09** — the access level belongs to the Google Cloud project (Cloud Console → Google Ads API → Overview); `GOOGLE_ADS_DEVELOPER_TOKEN` is optional and ignored by the API (only sent when set). Access levels matter: **Explorer** (applied for on the Overview page) serves production accounts with 2 880 ops/day but **blocks KeywordPlanIdeaService** (`keywords-research` fails until Basic Access); **Basic** = 15 000 ops/day, everything (requires brand verification of the Cloud project).
 
 ## Commands (85, grouped)
 

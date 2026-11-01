@@ -1,32 +1,36 @@
 # Google Ads API — behaviour notes & gotchas
 
-Jediná reference toho, jak se Google Ads API reálně chová (ověřeno proti oficiální dokumentaci na developers.google.com/google-ads/api, **2026-08-21**, verze **v25**; položky označené „živě" jsou navíc ověřené během vývoje na reálném účtu). CLAUDE.md odkazuje sem; hluboký detail patří sem, signpost zůstává štíhlý.
+Jediná reference toho, jak se Google Ads API reálně chová (ověřeno proti oficiální dokumentaci na developers.google.com/google-ads/api, **2026-08-21**, přístupové úrovně a developer tokeny znovu **2026-11-01**, verze **v25**; položky označené „živě" jsou navíc ověřené během vývoje na reálném účtu). CLAUDE.md odkazuje sem; hluboký detail patří sem, signpost zůstává štíhlý.
 
 ## Verze & knihovna
 
 - **API pinned na v25** (`API_VERSION` v `gads/api.py`). v25 vyšla 2026-07-22 (sunset srpen 2027), minor v25.1 2026-08-19 (bez breaking changes). v24 (předchozí pin) má sunset květen 2027. Google drží ~5 verzí naráz, major žije ~12 měsíců; upgrade nemusí být sekvenční. Sunset tabulka: developers.google.com/google-ads/api/docs/sunset-dates.
 - Breaking changes v25 se téhle appky netýkají (lifecycle goals → Goal/CampaignGoalConfig, Incentive service, LocalServicesLead, reach planning, benchmarks). Ověřeno proti release notes při bumpu pinu. Nová věc v v25.1: `AuthorizationError.CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION` — Cloud projekt s TEST úrovní proti produkčnímu účtu (CLI hlášku překládá na radu).
-- Python knihovna `google-ads` **31.4.0** (v25 podporuje od 31.2.0; 31.4.0 = v25.1; Python ≥3.9, <3.15). Verze knihovny ≠ verze API. Další plánované verze: v25.2 (září 2026), v26 (říjen 2026).
+- Python knihovna `google-ads` **35.0.0** (2.3.0; podporuje v23–v26, Python ≥3.10). Od 32.0 knihovna **nevyžaduje developer token** v konfiguraci. Verze knihovny ≠ verze API — pin zůstává v25, v26 je k dispozici. Knihovna od 35 varuje (FutureWarning), když je grpcio < 1.83 (post-quantum TLS; od dubna 2027 povinné) → `requirements.txt` drží `grpcio>=1.83.0`.
 
-## Přístupové úrovně developer tokenu
+## Přístupové úrovně (Cloud projekt) — developer tokeny skončily
 
-Každý token má **access level** (+ „permissible use"). Po registraci v API Center dostaneš typicky **Explorer Access** (automaticky), jinak Test Account Access:
+**Developer tokeny Google zrušil 9. 9. 2026** („Developer tokens were sunset on September 9, 2026"). Access level teď patří **Google Cloud projektu** (tomu, pod kterým je OAuth klient / service account), ne tokenu. Stávající úrovně Google převedl na Cloud projekty podle API aktivity za 90 dní před sunsetem. Token v hlavičce je volitelný a API ho ignoruje; v některé budoucí major verzi ho začne odmítat (datum neuvedeno). CLI 2.3.0 ho posílá jen když je v `.env` vyplněný.
+
+- Žádost i stav: **Cloud Console → Google Ads API → Overview** (`console.cloud.google.com/google/ads-apis/overview`). Potřebná role na projektu: Owner, Editor, Quota Administrator nebo Service Usage Admin. API Center v Google Ads je pro registraci a správu přístupu vypnuté.
+- Povolení Google Ads API v projektu = **Test** úroveň. Explorer se žádá na Overview (review typicky automatický). Basic jen z Exploreru: *Upgrade access level → Apply for access*; **podmínkou je brand verification Cloud projektu**, pak schválení za minuty. Známý problém: brand verification odmítá projekty na free trialu / s pozastavenou fakturací.
+- Nový Cloud projekt už nejde „napojit" na dřív schválený token — žádá sám za sebe.
 
 | Úroveň | Účty | Denní limit | Omezení |
 |---|---|---|---|
-| Test Account Access | jen testovací | 15 000 | produkce → `DEVELOPER_TOKEN_NOT_APPROVED` |
-| Explorer Access | testovací + produkční | **2 880** na produkci (15 000 na test) | **blokované služby**: Keyword Planner (`KeywordPlanIdeaService` & spol.), AudienceInsights, ReachPlan, billing, account creation, user management |
-| Basic Access | testovací + produkční | 15 000 | review ~5 pracovních dní; brand verification Cloud projektu volitelně zrychlí |
-| Standard Access | testovací + produkční | bez limitu | review ~10 dní; jen pro velké nástroje |
+| Test | jen testovací | 15 000 | produkce → `CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION` (v25+; dřív `DEVELOPER_TOKEN_NOT_APPROVED`) |
+| Explorer | testovací + produkční | **2 880** na produkci (15 000 na test) | **blokované služby**: Keyword Planner (`KeywordPlanIdeaService` & spol.), AudienceInsights, ReachPlan, billing, account creation, user management. Chybová hláška: „This method is not allowed for use with explorer access" — CLI ji překládá na radu (Basic přes Overview). |
+| Basic | testovací + produkční | 15 000 | brand verification povinná |
+| Standard | testovací + produkční | bez limitu | jen pro velké nástroje |
 
-Jeden Cloud projekt smí používat jen jeden developer token (jinak `DEVELOPER_TOKEN_PROHIBITED`). Jednotlivec může o token žádat jako „Individual" s URL profilu (GitHub/LinkedIn); generické URL Google odmítá.
+Známý problém (Google, po 9. 9. 2026): některé nově povýšené projekty dostávají na produkci `AUTHORIZATION_ERROR`; obejití = nový Cloud projekt.
 
 ## Kvóty & rate limity
 
-- **Denní kvóta je na developer token a měří se klouzavě za posledních 24 h** („per day is based on a sliding 24 hour time period" — access-levels docs), ne po kalendářním dnu/půlnoci Pacific. Operace = get požadavky + mutate operace. Překročení → `RESOURCE_EXHAUSTED`.
+- **Denní kvóta je na přístupovou úroveň (dnes Cloud projekt, dřív developer token) a měří se klouzavě za posledních 24 h** („per day is based on a sliding 24 hour time period" — access-levels docs), ne po kalendářním dnu/půlnoci Pacific. Operace = get požadavky + mutate operace. Překročení → `RESOURCE_EXHAUSTED`.
 - **Search/SearchStream request = 1 operace bez ohledu na počet řádků/batchů** (doslova v docs). Stránkování přes platný `next_page_token` se nepočítá. Mutace = 1 op za každou operation v requestu; max **10 000 operací v jednom mutate requestu** (`TOO_MANY_MUTATE_OPERATIONS`). Požadavky odmítnuté s `GoogleAdsFailure` se počítají; síťové chyby ne.
 - **`validate_only`**: Google **nedokumentuje**, že by byly dry-runy z kvóty vyjmuté → CLI je počítá taky (lokální odhad je vždy ≥ realita). Dříve jsme psali „zdarma" — nepodložené.
-- CLI trackuje operace lokálně per účet v `.quota/<account>.json` (log `[timestamp, ops]`, ořezávaný na 24 h) a **hard-stopuje před** voláním, které by cap překročilo (`GOOGLE_ADS_DAILY_OP_CAP`). Je to lokální odhad, ne serverové číslo — autoritativní je Cloud Console → APIs & Services → Google Ads API (metriky per metoda).
+- CLI trackuje operace lokálně per účet v `.quota/<account>.json` (log `[timestamp, ops]`, ořezávaný na 24 h) a **hard-stopuje před** voláním, které by cap překročilo (`GOOGLE_ADS_DAILY_OP_CAP`). Je to lokální odhad, ne serverové číslo — autoritativní je Cloud Console → Google Ads API (metriky per metoda).
 - gRPC odpověď max **64 MB** — u širokých SELECTů vyber míň polí (CLI streamuje vždy).
 - **QPS limity** jsou oddělené od denní kvóty, metrované **per client CID + developer token**, token-bucket, přesné číslo Google nepublikuje (mění se podle zátěže). Porušení → `RESOURCE_TEMPORARILY_EXHAUSTED` (rate) / `RESOURCE_EXHAUSTED`; chyba nese `QuotaErrorDetails.retry_delay` (doporučená pauza). CLI retryuje 5→10→20 s (oficiálně doporučené schéma), respektuje `retry_delay`, max 3 pokusy, pak abort — nikdy nemlátí do API ve smyčce. Doporučení Googlu: omezit paralelní tasky, batchovat mutace, throttlovat na klientu.
 - **Planning services (Keyword Planner / GenerateKeywordIdeas / HistoricalMetrics / ForecastMetrics) = 1 request/s per CID** (60 za 60 s) — víc keyword-research požadavků pouštěj sekvenčně. A vyžadují Basic Access.
@@ -54,6 +58,8 @@ Jeden Cloud projekt smí používat jen jeden developer token (jinak `DEVELOPER_
 
 - Všechny mutate requesty berou `validate_only` (kromě `ApplyRecommendationRequest`, `DismissRecommendationRequest` a experiment lifecycle metod — tam CLI dry-run řeší „jen plán, nic nevolám").
 - Nové entity jdou vytvářet **atomicky v jednom `GoogleAdsService.Mutate`** s temp resource names (`customers/{cid}/campaignBudgets/-1`, kampaň `-2`…) — tak dělá `campaign-create` budget + kampaň + geo/language kritéria najednou (all-or-nothing).
+- `campaign-create` nastavuje `network_settings.target_search_network = True` (partneři Vyhledávací sítě, výchozí chování Googlu) a nechává `geo_target_type_setting` prázdné → Search default **PRESENCE_OR_INTEREST** (reklama i lidem, kteří se o lokalitu „zajímají"). Od 2.3.0 opt-out přes `--no-search-partners` a `--presence-only` (`positive_geo_target_type = PRESENCE`); výchozí chování se nezměnilo.
+- **Portfolio bidding** (`bidding-set --portfolio <id>`, 2.3.0): `campaign.bidding_strategy` je ve stejném oneof `campaign_bidding_strategy` jako standardní strategie, takže jeho nastavení kampaň odpojí od dosavadní strategie; maska = `bidding_strategy`. Cíl (tCPA/tROAS) patří portfoliu, ne kampani. Ověřeno živě přes validate_only (2026-11-01): API pole přijme, neexistující ID → `Resource was not found` na `operations.update.bidding_strategy`.
 - **Update = resource_name + změněná pole + field mask.** Pole mimo masku se nemění. **POZOR na masku u výchozích hodnot**: `protobuf_helpers.field_mask(None, msg)` porovnává HODNOTY s defaulty, takže pole záměrně nastavené na default (`primary_for_goal = False`, `bid_modifier = 0`, prázdná bidding zpráva `manual_cpc`/`maximize_conversions`) z masky vypadne a API provede **tichý no-op** (žádná chyba). Zároveň maska **nesmí jmenovat prázdné message pole** (`FieldMaskError.FIELD_HAS_SUBFIELDS`, ověřeno živě na v25) — dokumentovaný workaround Googlu je pojmenovat jeden mutable subfield, např. `maximize_conversions.target_cpa_micros` (nikdy `cpc_bid_ceiling/floor` — ty jsou portfolio-only). CLI proto staví masku presence-aware rekurzí přes `ListFields()` s leaf mapou pro prázdné bidding zprávy (`api._field_mask`); do 2.2.0 tak `bidding-set max_conversions`/`manual_cpc`, `device-bid --modifier 0` a `conversion-update --primary no` nic neudělaly. Všechny čtyři cesty ověřeny živě přes validate_only (2026-08-21).
 - **REMOVED je trvalé — žádné undelete.** REMOVED entity navíc **zůstávají ve výpisech navždy** (výchozí GAQL filtry CLI je skrývají: `status != 'REMOVED'`). Záchranná brzda CLI: remove jde jen na PAUSED entitu (`--force` obejde).
 - **Status update na REMOVED tiše ne-funguje** u ad_group_ad — remove vyžaduje remove operation, ne update statusu. CLI to řeší správně; nikdy „neopravovat zpět".
@@ -140,7 +146,8 @@ Jeden Cloud projekt smí používat jen jeden developer token (jinak `DEVELOPER_
 
 ## Chyby
 
-- `GoogleAdsException.failure.errors[]` nese message + `location.field_path_elements` (které pole) + typované error kódy; CLI je vypisuje čitelně s `request_id` a u autorizačních kódů (`DEVELOPER_TOKEN_NOT_APPROVED`, `CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION`, `DEVELOPER_TOKEN_PROHIBITED`, `USER_PERMISSION_DENIED`, `CUSTOMER_NOT_ENABLED`) přidá radu.
+- `GoogleAdsException.failure.errors[]` nese message + `location.field_path_elements` (které pole) + typované error kódy; CLI je vypisuje čitelně s `request_id` a u autorizačních kódů (`DEVELOPER_TOKEN_NOT_APPROVED`, `CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION`, `DEVELOPER_TOKEN_PROHIBITED`, `USER_PERMISSION_DENIED`, `CUSTOMER_NOT_ENABLED`) přidá radu. Navíc rada podle textu zprávy u Explorer access („not allowed for use with explorer access" → Basic přes Cloud Console).
+- **`CUSTOMER_NOT_ENABLED` u nového účtu pod MCC** (hlášeno z praxe, 2026-10): účet založený z MCC je pro API „not yet enabled" (v `customer_client` MCC chybí), dokud se v rozhraní Google Ads nedokončí průvodce **včetně fakturace**. Průvodce nejde přeskočit a vynutí první kampaň → hned ji pozastav. Čtení pak jde dřív, zápisy ještě chvíli po aktivaci padají na stejnou chybu.
 - Rate chyby (`quota_error`) mají `quota_error_details.retry_delay` — CLI ho honoruje.
 - OAuth chyby (`RefreshError: invalid_grant` = expirovaný/odvolaný refresh token; `invalid_client` = špatný OAuth klient) CLI překládá na čitelnou radu místo tracebacku.
 - EU political advertising: nové kampaně vyžadují `contains_eu_political_advertising` (CLI posílá DOES_NOT_CONTAIN…).

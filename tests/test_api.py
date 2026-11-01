@@ -3,6 +3,7 @@ guard, retry policy, dry-run mutations."""
 from __future__ import annotations
 
 import json
+import os
 import time
 
 import pytest
@@ -17,12 +18,25 @@ from conftest import Stub, ns  # noqa: F401  (ns used by other modules)
 # Credential resolution
 # ---------------------------------------------------------------------------
 
+POSIX_MODES = pytest.mark.skipif(os.name == "nt", reason="Windows has no POSIX file modes")
+
+
 def test_config_installed_app_from_env():
     cfg = api._config_dict(None)
     assert cfg["developer_token"] == "fake-dev-token"
     assert cfg["refresh_token"] == "fake-refresh"
     assert cfg["login_customer_id"] == "1234567890"  # dashes stripped
     assert "json_key_file_path" not in cfg
+
+
+def test_config_without_developer_token_is_valid(monkeypatch):
+    """Developer tokens were sunset on 2026-09-09: an empty token is left out
+    and the client still builds (library 32+ no longer requires it)."""
+    monkeypatch.setenv("GOOGLE_ADS_DEVELOPER_TOKEN", "")
+    cfg = api._config_dict(None)
+    assert "developer_token" not in cfg
+    from google.ads.googleads import config as lib_config
+    lib_config.validate_dict(cfg)  # the library's own check (raised before 32.0)
 
 
 def test_config_missing_credentials_dies_with_var_names(monkeypatch, capsys):
@@ -178,6 +192,7 @@ def test_quota_warns_at_80_percent(monkeypatch, capsys):
     assert "80%" in capsys.readouterr().err
 
 
+@POSIX_MODES
 def test_atomic_write_sets_mode_and_replaces(tmp_path):
     target = tmp_path / "f.txt"
     api._atomic_write_text(target, "one", mode=0o600)
@@ -255,8 +270,30 @@ def test_non_rate_error_dies_with_request_id_and_hint(fake_client, capsys):
     with pytest.raises(SystemExit):
         api._execute_with_retry(call, "test")
     err = capsys.readouterr().err
-    assert "req-123" in err and "not approved" in err and "Basic Access" in err
-    assert "Traceback" not in err
+    assert "req-123" in err and "not approved" in err and "ads-apis/overview" in err
+    assert "API Center" not in err and "Traceback" not in err
+
+
+def test_explorer_access_message_points_to_cloud_console(fake_client, capsys):
+    def call():
+        raise _gads_exception(fake_client, authz="ACTION_NOT_PERMITTED",
+                              message="This method is not allowed for use with explorer access. "
+                                      "Please apply for basic or standard access.")
+
+    with pytest.raises(SystemExit):
+        api._execute_with_retry(call, "test")
+    err = capsys.readouterr().err
+    assert "Basic access" in err and "ads-apis/overview" in err and "API Center" not in err
+
+
+def test_customer_not_enabled_explains_the_new_account_wizard(fake_client, capsys):
+    def call():
+        raise _gads_exception(fake_client, authz="CUSTOMER_NOT_ENABLED",
+                              message="The customer account can't be accessed because it is not yet enabled.")
+
+    with pytest.raises(SystemExit):
+        api._execute_with_retry(call, "test")
+    assert "fakturace" in capsys.readouterr().err
 
 
 def test_transient_error_retried_for_reads_only(monkeypatch, capsys):

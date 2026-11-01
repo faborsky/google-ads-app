@@ -9,5 +9,9 @@ if [ ! -d .venv ]; then
 fi
 
 # shellcheck disable=SC1091
-source .venv/bin/activate
+if [ -f .venv/Scripts/activate ]; then  # Windows (Git Bash): venv uses Scripts/
+  source .venv/Scripts/activate
+else
+  source .venv/bin/activate
+fi
 exec python google_ads_cli.py "$@"

@@ -45,6 +45,19 @@ def test_campaign_create_is_atomic_paused_search_with_geo_language(recorder):
     assert camp.network_settings.target_content_network is False
     assert mops[2].campaign_criterion_operation.create.location.geo_target_constant.endswith("/2203")
     assert mops[3].campaign_criterion_operation.create.language.language_constant.endswith("/1021")
+    # defaults unchanged: search partners on, presence-or-interest (setting left unset)
+    assert camp.network_settings.target_search_network is True
+    assert not camp._pb.HasField("geo_target_type_setting")
+
+
+def test_campaign_create_no_search_partners_and_presence_only(recorder):
+    campaigns.cmd_campaign_create(ns(name="T", budget=100, bidding="manual_cpc",
+                                     target_cpa=None, target_roas=None, geo="2203", language="1021",
+                                     no_search_partners=True, presence_only=True))
+    camp = list(recorder.last("mutate")["request"].mutate_operations)[1].campaign_operation.create
+    assert camp.network_settings.target_search_network is False
+    assert camp.network_settings.target_google_search is True
+    assert camp.geo_target_type_setting.positive_geo_target_type.name == "PRESENCE"
 
 
 def test_campaign_create_confirm_writes_and_counts_ops(recorder):

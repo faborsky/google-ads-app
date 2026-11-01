@@ -4,9 +4,15 @@ from __future__ import annotations
 import argparse
 import os
 
+import pytest
+
 from gads.commands import auth as auth_cmd
 
 
+POSIX_MODES = pytest.mark.skipif(os.name == "nt", reason="Windows has no POSIX file modes")
+
+
+@POSIX_MODES
 def test_write_creates_env_from_example_with_600(tmp_path):
     (tmp_path / ".env.example").write_text("GOOGLE_ADS_DEVELOPER_TOKEN=\nGOOGLE_ADS_REFRESH_TOKEN=\n")
     action = auth_cmd._write_refresh_token("GOOGLE_ADS_REFRESH_TOKEN", "1//tok")
@@ -17,6 +23,7 @@ def test_write_creates_env_from_example_with_600(tmp_path):
     assert oct(env.stat().st_mode & 0o777) == "0o600"
 
 
+@POSIX_MODES
 def test_write_replaces_existing_value_and_backs_up(tmp_path):
     env = tmp_path / ".env"
     env.write_text("GOOGLE_ADS_DEVELOPER_TOKEN=abc\nGOOGLE_ADS_REFRESH_TOKEN=old\n")

@@ -161,6 +161,11 @@ def build_parser() -> argparse.ArgumentParser:
                     help=f"Geo target IDs CSV (default {DEFAULT_GEO_TARGET_ID}=CZ; '' = none)")
     sp.add_argument("--language", default=DEFAULT_LANGUAGE_ID,
                     help=f"Language IDs CSV (default {DEFAULT_LANGUAGE_ID}=Czech; '' = none)")
+    sp.add_argument("--no-search-partners", dest="no_search_partners", action="store_true",
+                    help="Don't serve on Google search partner sites (default: on)")
+    sp.add_argument("--presence-only", dest="presence_only", action="store_true",
+                    help="Target only people IN the location, not those interested in it "
+                         "(default: presence or interest)")
 
     sp = _cmd(sub, "campaign-status", cmd_campaign_status,
               "Enable/pause/remove a campaign (REMOVED is permanent!)", write=True)
@@ -602,7 +607,17 @@ def _print_banner() -> None:
     print()
 
 
+def _force_utf8_output() -> None:
+    """Windows encodes piped stdout/stderr in the ANSI code page (cp1250 on
+    Czech systems), which crashes on characters like → and mangles diacritics
+    for whoever reads the pipe (Claude Code included). Always emit UTF-8."""
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
+
+
 def main() -> None:
+    _force_utf8_output()
     try:  # don't traceback when piped into head/grep
         from signal import SIG_DFL, SIGPIPE, signal
         signal(SIGPIPE, SIG_DFL)

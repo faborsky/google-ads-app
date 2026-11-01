@@ -87,10 +87,10 @@ def cmd_quota(args: argparse.Namespace) -> None:
               "validate_only dry-runy počítáme taky (Google výjimku nedokumentuje). "
               "Google měří limit klouzavě za 24 h (ne kalendářní den). Standard Access "
               "denní cap nemá — zvyš GOOGLE_ADS_DAILY_OP_CAP. Autoritativní čísla: "
-              "Cloud Console → APIs & Services → Google Ads API.")
+              "Cloud Console → Google Ads API → Overview.")
 
 
-# Documented Google Ads API limits (docs verified 2026-08-21) — the API has no
+# Documented Google Ads API limits (docs verified 2026-11-01) — the API has no
 # runtime limits endpoint (unlike Sklik's api.limits), so these are constants.
 _API_LIMITS = {
     "api_version": API_VERSION,
@@ -99,13 +99,15 @@ _API_LIMITS = {
                                  "Keyword Planner & planning services BLOCKED",
     "daily_ops_basic_access": 15000,
     "daily_ops_standard_access": "unlimited",
-    "daily_window": "sliding 24 h per developer token (not a calendar day)",
+    "access_level_owner": "Google Cloud project (developer tokens sunset 2026-09-09; "
+                          "apply at console.cloud.google.com/google/ads-apis/overview)",
+    "daily_window": "sliding 24 h per Cloud project access level (not a calendar day)",
     "search_request_ops": "1 op per Search/SearchStream request (regardless of rows)",
     "validate_only_requests": "not documented as exempt → the CLI counts them too",
     "mutate_ops_per_request_max": 10000,
     "grpc_response_max": "64 MB per response (select fewer fields / stream)",
     "planning_services_qps": "1 request/s per CID (Keyword Planner / GenerateKeywordIdeas)",
-    "qps_metering": "token bucket per client CID + developer token; violation → "
+    "qps_metering": "token bucket per client CID + Cloud project; violation → "
                     "RESOURCE_EXHAUSTED / RESOURCE_TEMPORARILY_EXHAUSTED",
     "retry_policy": "exponential back-off 5→10→20 s (honours Google's retry_delay), "
                     "max 3 retries; transient transport errors retried for reads only",

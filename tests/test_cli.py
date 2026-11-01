@@ -13,7 +13,7 @@ APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CLI = os.path.join(APP_DIR, "google_ads_cli.py")
 
 
-def _run(*argv, creds: bool = False):
+def _run(*argv, creds: bool = False, extra_env: dict | None = None):
     """Run the CLI. Empty-string env vars win over .env (dotenv never overrides
     existing variables), so the real .env is neutralised."""
     env = {k: v for k, v in os.environ.items() if not k.startswith("GOOGLE_ADS_")}
@@ -21,8 +21,9 @@ def _run(*argv, creds: bool = False):
               "GOOGLE_ADS_CLIENT_SECRET", "GOOGLE_ADS_REFRESH_TOKEN",
               "GOOGLE_ADS_LOGIN_CUSTOMER_ID", "GOOGLE_ADS_JSON_KEY_FILE_PATH"):
         env[k] = ""
+    env.update(extra_env or {})
     return subprocess.run([sys.executable, CLI, *argv], capture_output=True, text=True,
-                          env=env, cwd=APP_DIR, timeout=90)
+                          encoding="utf-8", env=env, cwd=APP_DIR, timeout=90)
 
 
 def test_help_works_without_configured_env():
@@ -98,3 +99,10 @@ def test_bidding_set_takes_strategy_or_portfolio_not_both():
     assert r.returncode == 2 and "not allowed with" in r.stderr
     r = _run("bidding-set", "123", "42")
     assert r.returncode == 2 and "--strategy" in r.stderr and "--portfolio" in r.stderr
+
+
+def test_piped_output_is_utf8_even_with_a_legacy_console_encoding():
+    """Windows pipes default to the ANSI code page (cp1250): `→` used to crash."""
+    r = _run("quota", extra_env={"PYTHONIOENCODING": "cp1250"})
+    assert "UnicodeEncodeError" not in r.stderr
+    assert r.returncode == 0 and "→" in r.stdout

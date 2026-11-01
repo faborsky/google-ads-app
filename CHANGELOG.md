@@ -2,12 +2,39 @@
 
 Verze aplikace je v `gads/__init__.py` (`__version__`, SemVer). Formát vychází z [Keep a Changelog](https://keepachangelog.com/). Datum je vydání dané verze.
 
-## [Unreleased]
+## [2.3.0] — 2026-11-01 — Bez developer tokenu, portfolio bidding, Windows 🪟
+
+Vyřízené příspěvky z GitHubu (PR #3, issues #1 a #2). Díky petremargineanu, zilien1 a Valis1978.
+
+### Změněno
+- **Developer token už není potřeba.** Google developer tokeny 9. 9. 2026 zrušil, přístupová
+  úroveň (Explorer/Basic/Standard) teď patří Google Cloud projektu a žádá se v Cloud Console →
+  Google Ads API → Overview. `GOOGLE_ADS_DEVELOPER_TOKEN` je volitelný: když je vyplněný, posílá
+  se dál (API ho ignoruje), když je prázdný, appka ho vynechá. Dřív bez něj odmítla startovat,
+  takže noví uživatelé se k ní nedostali. (#2)
+- Knihovna `google-ads` **31.4 → 35.0** (token nevyžaduje od 32.0; API pin zůstává **v25**),
+  `grpcio>=1.83` (jinak knihovna varuje kvůli post-quantum TLS). Python 3.10–3.14 beze změny.
+- Návod v README (EN i CZ), `.env.example`, `docs/api-notes.md` a skill přepsané na nový postup:
+  Cloud projekt → Explorer na stránce Overview → Basic po ověření značky (schválení za minuty).
 
 ### Přidáno
 - **`bidding-set --portfolio <bidding_strategy_id>`** připojí kampaň k existující portfolio
   bidding strategii (`campaign.bidding_strategy`). Vylučuje se s `--strategy`;
   `--target-cpa`/`--target-roas` odmítne, protože cíl patří portfoliu, ne kampani.
+  Příspěvek petremargineanu (PR #3), ověřeno živě přes validate_only.
+- **`campaign-create --no-search-partners`** (bez partnerů Vyhledávací sítě) a
+  **`--presence-only`** (cílení jen na lidi v lokalitě, ne „přítomnost nebo zájem").
+  Volitelné, výchozí chování se nemění. (#2)
+
+### Opraveno
+- **Windows:** `run.sh`/`setup.sh` hledají venv i v `.venv/Scripts` (Git Bash); výstup přes rouru
+  už nepadá na `UnicodeEncodeError` (cp1250 vs. `→`) — CLI vždy píše UTF-8, takže Claude Code
+  dostane i správnou diakritiku; testy na POSIX práva souborů se na Windows přeskočí. (#1)
+- Chybové hlášky už neposílají do zrušeného API Center: neschválený přístup a Explorer access
+  u Keyword Planneru radí Cloud Console → Overview (Basic přes ověření značky).
+- `CUSTOMER_NOT_ENABLED` vysvětlí, že nový účet pod MCC se pro API zpřístupní až po dokončení
+  průvodce v rozhraní včetně fakturace (a vynucenou první kampaň je potřeba pozastavit). (#2)
+- Testy: 107 → 117.
 
 ## [2.2.0] — 2026-08-21 — Audit před zveřejněním: v25, opravené tiché no-op updaty, klouzavá kvóta, testy 🛡️
 

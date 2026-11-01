@@ -2,7 +2,7 @@
 
 **🇬🇧 English** · [🇨🇿 Čeština](README.cs.md) · [🇪🇸 Español](i18n/README.es.md) · [🇧🇷 Português](i18n/README.pt-BR.md) · [🇩🇪 Deutsch](i18n/README.de.md) · [🇫🇷 Français](i18n/README.fr.md) · [🇨🇳 简体中文](i18n/README.zh-CN.md) · [🇯🇵 日本語](i18n/README.ja.md) · [🇸🇪 Svenska](i18n/README.sv.md) · [🇳🇴 Norsk](i18n/README.nb.md) · [🇩🇰 Dansk](i18n/README.da.md)
 
-A CLI for managing **Google Ads search campaigns** through the official [Google Ads API](https://developers.google.com/google-ads/api) (v25, `google-ads` library 31.4+). For marketers and founders who want to run campaigns from the terminal, or hand them to Claude Code, instead of clicking through the Google Ads web interface.
+A CLI for managing **Google Ads search campaigns** through the official [Google Ads API](https://developers.google.com/google-ads/api) (v25, `google-ads` library 35+). For marketers and founders who want to run campaigns from the terminal, or hand them to Claude Code, instead of clicking through the Google Ads web interface.
 
 It covers the whole lifecycle of a search campaign: campaigns, ad groups, RSA ads, keywords, negatives (including shared lists), assets (sitelinks/callouts/snippets), audiences and remarketing, targeting (geo/language/schedule/device/demographics), budgets, Smart Bidding, conversion actions, Google's recommendations, ad approval checks, change history, experiments and GAQL reporting. It does not handle Display/YouTube/Shopping; Performance Max is reporting only.
 
@@ -17,7 +17,9 @@ The repo also ships a [Claude Code skill](#claude-code-skill-google-ads) that wr
 
 ## 🆕 What's new
 
-Current version **2.2.0**, the **pre-release audit**: API moved to **v25** (library 31.4), **fixed silent no-op updates** (`bidding-set max_conversions`/`manual_cpc`, `device-bid --modifier 0` and `conversion-update --primary no` used to do nothing, because the update mask dropped fields set to their default value), **quota measured over a sliding 24 h window** (the way Google measures it, not by calendar day), `./run.sh auth` **writes the refresh token straight into `.env`** (the token no longer passes through the terminal or a chat), **service account** as an alternative to OAuth (no browser, no 7-day expiry), clean error messages instead of tracebacks (expired token, unapproved developer token…), `--json` also works after the command, no more hardcoded `LIMIT 500` in `pmax-search-terms`, an **offline test suite (107 tests)** that validates every write against the real API v25 types, MIT license. Before that, 2.1.0 (visual signature) and 2.0.0 (big refresh, 19 → **85 commands**). Full history: **[CHANGELOG.md](CHANGELOG.md)**.
+Current version **2.3.0**: **no developer token needed any more** (Google sunset developer tokens on 2026-09-09; the access level now belongs to your Cloud project, the setup guide below is rewritten for it), library 35 (API stays on v25), `bidding-set --portfolio` attaches a campaign to a portfolio bid strategy, `campaign-create --no-search-partners` / `--presence-only`, **Windows** fixes (Git Bash venv, UTF-8 output through a pipe) and clearer errors for Explorer access and new accounts under an MCC. Thanks to the contributors who reported and sent these.
+
+2.2.0, the **pre-release audit**: API moved to **v25** (library 31.4), **fixed silent no-op updates** (`bidding-set max_conversions`/`manual_cpc`, `device-bid --modifier 0` and `conversion-update --primary no` used to do nothing, because the update mask dropped fields set to their default value), **quota measured over a sliding 24 h window** (the way Google measures it, not by calendar day), `./run.sh auth` **writes the refresh token straight into `.env`** (the token no longer passes through the terminal or a chat), **service account** as an alternative to OAuth (no browser, no 7-day expiry), clean error messages instead of tracebacks (expired token, unapproved developer token…), `--json` also works after the command, no more hardcoded `LIMIT 500` in `pmax-search-terms`, an **offline test suite (107 tests)** that validates every write against the real API v25 types, MIT license. Before that, 2.1.0 (visual signature) and 2.0.0 (big refresh, 19 → **85 commands**). Full history: **[CHANGELOG.md](CHANGELOG.md)**.
 
 > 💡 Want to hear about new versions? On GitHub: **Watch → Custom → Releases**.
 
@@ -49,7 +51,7 @@ A Python other than the default `python3`: `PYTHON=python3.12 ./setup.sh`.
 
 ### Windows
 
-The `setup.sh`/`run.sh` scripts are bash. On Windows, use **Git Bash** (part of [Git for Windows](https://git-scm.com/download/win)) or **WSL** and the steps above work unchanged. Or plain PowerShell:
+The `setup.sh`/`run.sh` scripts are bash. On Windows, use **Git Bash** (part of [Git for Windows](https://git-scm.com/download/win)) or **WSL**; the scripts find the venv in both `.venv/bin` and `.venv/Scripts`. On Windows `python3` is often just a Microsoft Store alias, so run setup as `PYTHON=python ./setup.sh`. The CLI always writes UTF-8, so piped output (the way Claude Code reads it) keeps Czech diacritics and arrows intact. Or plain PowerShell:
 
 ```powershell
 git clone https://github.com/faborsky/google-ads-app.git; cd google-ads-app
@@ -62,7 +64,9 @@ python google_ads_cli.py accounts
 
 ## Authentication
 
-The Google Ads API has the strictest access requirements of the big ad APIs: you need a **developer token** (= "you may call the API"), **OAuth access to the account** (= "you may touch these accounts") and an **MCC ID**. All of it is one-off. Checked against the official documentation on 2026-08-21 ([get started](https://developers.google.com/google-ads/api/docs/get-started/introduction), [access levels](https://developers.google.com/google-ads/api/docs/access-levels)).
+The Google Ads API has the strictest access requirements of the big ad APIs: you need an approved **access level for your Google Cloud project** (= "you may call the API"), **OAuth access to the account** (= "you may touch these accounts") and an **MCC ID**. All of it is one-off. Checked against the official documentation on 2026-11-01 ([access levels](https://developers.google.com/google-ads/api/docs/api-policy/access-levels), [developer token sunset](https://developers.google.com/google-ads/api/docs/api-policy/developer-token)).
+
+> **Developer tokens are gone.** Google sunset them on **2026-09-09**: the access level (Explorer / Basic / Standard) now belongs to the Cloud project and the API ignores the token. Since 2.3.0 the app doesn't need `GOOGLE_ADS_DEVELOPER_TOKEN`; an old value in `.env` does no harm.
 
 ### Overview: what goes into `.env`
 
@@ -70,12 +74,11 @@ You fill in three values by hand, the app writes the fourth itself, and **one nu
 
 | Variable | What it is | Where to get it | How it gets there |
 |---|---|---|---|
-| `GOOGLE_ADS_DEVELOPER_TOKEN` | 22-character token of your **manager (MCC) account** | Google Ads MCC → Tools → **API Center** (step 1) | you copy it by hand |
 | `GOOGLE_ADS_CLIENT_ID` | OAuth client, ends with `.apps.googleusercontent.com` | Google Cloud Console (step 2) | you copy it by hand |
 | `GOOGLE_ADS_CLIENT_SECRET` | that OAuth client's secret | Google Cloud Console (step 2) | you copy it by hand |
 | `GOOGLE_ADS_REFRESH_TOKEN` | long-term access to your Google account | `./run.sh auth` (step 3) | **written automatically**, you never copy it anywhere |
 | `GOOGLE_ADS_LOGIN_CUSTOMER_ID` | MCC ID **without dashes** (`123-456-7890` → `1234567890`) | Google Ads header (step 4) | you copy it by hand |
-| `GOOGLE_ADS_DAILY_OP_CAP` | cap on operations per 24 h | depends on the token's access level (step 1) | `15000` (Basic) / `2880` (Explorer) |
+| `GOOGLE_ADS_DAILY_OP_CAP` | cap on operations per 24 h | depends on the Cloud project's access level (step 1) | `15000` (Basic) / `2880` (Explorer) |
 | (none) | **customer ID of the target account** you're working on | `./run.sh accounts` | **doesn't go into `.env`**, it's a command argument |
 
 Three numbers that are easy to mix up: **Client ID** (long string from Cloud) × **MCC login customer ID** (10 digits, goes into `.env`) × **client account customer ID** (10 digits, goes into the command).
@@ -92,26 +95,26 @@ The one case you can't fix on the spot: if your account has no other passkey to 
 
 A passkey isn't biometrics. Without a fingerprint reader you confirm it with your phone via a QR code, your computer password, a Windows Hello PIN or a password manager (Bitwarden, 1Password). If you'd rather skip all this, use a **service account** (below); it's exempt from the requirement.
 
-### 1) Developer token + access level
+### 1) Manager account + access level (Cloud project)
 
 1. You need a **manager (MCC) account**. If you don't have one, create one for free at [ads.google.com/home/tools/manager-accounts](https://ads.google.com/home/tools/manager-accounts) (with an email that doesn't have a Google Ads account yet) and link your ad accounts under it.
-2. In the MCC: **Tools → API Center** → fill in the *API Access* form (company + website; as an individual, write "Individual" and use your GitHub/LinkedIn profile as the URL, Google rejects a generic `example.com`) → you get the token. → `GOOGLE_ADS_DEVELOPER_TOKEN`
-3. The token's **access level** decides what you're allowed to do:
+2. Create a Google Cloud project (or use an existing one) and **enable the Google Ads API** in it: [console.cloud.google.com/apis/library/googleads.googleapis.com](https://console.cloud.google.com/apis/library/googleads.googleapis.com) → **Enable**. That gives the project *Test* access (test accounts only).
+3. Apply for a higher level on the **Google Ads API Overview** page: [console.cloud.google.com/google/ads-apis/overview](https://console.cloud.google.com/google/ads-apis/overview) (pick your project). You need the Owner, Editor, Quota Administrator or Service Usage Admin role on the project. The old *Tools → API Center* in Google Ads no longer issues anything.
 
-   | Level | Which accounts | Daily operation limit | Note |
+   | Level | Which accounts | Daily operation limit | How to get it |
    |---|---|---|---|
-   | **Explorer Access** (usually granted automatically after sign-up) | test and **production** | 2,880 / day on production | **Keyword Planner is blocked** (`keywords-research` won't run), everything else in this CLI works. Set `GOOGLE_ADS_DAILY_OP_CAP=2880`. |
-   | Test Account Access (when Google doesn't assess the sign-up automatically) | [test accounts](https://developers.google.com/google-ads/api/docs/best-practices/test-accounts) only | 15,000 | a production account returns `DEVELOPER_TOKEN_NOT_APPROVED` |
-   | **Basic Access** (apply in API Center: *Apply for Basic Access*) | test and production | **15,000 / day** | review ~5 business days; everything incl. Keyword Planner. [Brand verification](https://developers.google.com/google-ads/api/docs/api-policy/brand-verification) of the Cloud project is optional and speeds up the review. |
-   | Standard Access | test and production | unlimited | for large tools (~10 days of review) |
+   | Test (automatic after enabling the API) | [test accounts](https://developers.google.com/google-ads/api/docs/best-practices/test-accounts) only | 15,000 | a production account returns `CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION` |
+   | **Explorer** | test and **production** | 2,880 / day on production | apply on the Overview page, review is usually automated. **Keyword Planner is blocked** (`keywords-research` won't run), everything else in this CLI works. Set `GOOGLE_ADS_DAILY_OP_CAP=2880`. |
+   | **Basic** | test and production | **15,000 / day** | from Explorer: Overview → *Upgrade access level* → *Apply for access*. **[Brand verification](https://developers.google.com/google-ads/api/docs/api-policy/brand-verification) of the Cloud project is required** first; after that the review takes minutes. Everything incl. Keyword Planner. |
+   | Standard | test and production | unlimited | for large tools |
 
-   The limit is **per developer token, over a sliding window of the last 24 h** (not a calendar day). The CLI tracks it locally and stops before you go over (`GOOGLE_ADS_DAILY_OP_CAP` in `.env`).
+   The limit is measured **over a sliding window of the last 24 h** (not a calendar day). The CLI tracks it locally and stops before you go over (`GOOGLE_ADS_DAILY_OP_CAP` in `.env`). Known Google issue: brand verification gets rejected for projects on a free trial or with suspended billing.
 
 ### 2) OAuth client (Cloud Console)
 
 OAuth settings in Cloud Console have moved under **Google Auth Platform**. Older guides (including versions of this README up to 2.2.0) point to "APIs & Services → OAuth consent screen", which no longer exists. Current paths, checked on 2026-08-28:
 
-1. **Enable the Google Ads API** in the project: [console.cloud.google.com/apis/library/googleads.googleapis.com](https://console.cloud.google.com/apis/library/googleads.googleapis.com) → **Enable**. (One Cloud project = one developer token.)
+1. Use the **same Cloud project** as in step 1 (the one with the access level and the Google Ads API enabled).
 2. **Branding**: [console.cloud.google.com/auth/branding](https://console.cloud.google.com/auth/branding), the app name (you'll see it on the sign-in screen), support email, developer contact.
 3. **Audience**: [console.cloud.google.com/auth/audience](https://console.cloud.google.com/auth/audience), User type **External**, and set Publishing status to **In production** via **Publish app**. In "Testing" mode Google **invalidates refresh tokens after 7 days** and you'd have to rerun `auth` every week.
 4. **Clients**: [console.cloud.google.com/auth/clients](https://console.cloud.google.com/auth/clients) → **+ Create client** → Application type **Desktop app** → both values pop up once it's created.
@@ -147,7 +150,7 @@ Upsides: nothing expires, access doesn't hang on your personal login, and it sui
 
 ### Test account (optional sandbox)
 
-Want to try the API without risk? Create a [test manager account](https://developers.google.com/google-ads/api/docs/best-practices/test-accounts) (with a different Google account than your production MCC), a test client account under it, and call it with the **same developer token** (it works there even before approval). Test accounts don't serve or bill anything; Google deletes them after a year of inactivity.
+Want to try the API without risk? Create a [test manager account](https://developers.google.com/google-ads/api/docs/best-practices/test-accounts) (with a different Google account than your production MCC), a test client account under it, and call it with the **same Cloud project and OAuth client** (Test access is enough there). Test accounts don't serve or bill anything; Google deletes them after a year of inactivity.
 
 ### Multi-account
 
@@ -181,7 +184,7 @@ The **target account's customer ID** is a positional argument of most commands (
 
 ### Account protection (quotas and rate limits)
 
-- **Daily quota**: Basic Access = 15,000 operations (Explorer 2,880) **over a sliding 24 h window** per developer token (a read request = 1 op regardless of rows; mutation = 1 op per operation; validate_only dry-runs are counted too, because Google doesn't document an exemption, so the local estimate is always ≥ reality). The CLI tracks usage locally in `.quota/` per account and **stops BEFORE you go over** (`GOOGLE_ADS_DAILY_OP_CAP` in `.env`; Standard Access has no limit, so set it high).
+- **Daily quota**: Basic Access = 15,000 operations (Explorer 2,880) **over a sliding 24 h window** per Cloud project access level (a read request = 1 op regardless of rows; mutation = 1 op per operation; validate_only dry-runs are counted too, because Google doesn't document an exemption, so the local estimate is always ≥ reality). The CLI tracks usage locally in `.quota/` per account and **stops BEFORE you go over** (`GOOGLE_ADS_DAILY_OP_CAP` in `.env`; Standard Access has no limit, so set it high).
 - **QPS limits** (token bucket per account + token): on `RESOURCE_EXHAUSTED` the CLI waits 5→10→20 s (honouring the pause Google recommends), max 3 attempts, then gives up. It never hammers the API in a loop. Transient outages (UNAVAILABLE) are retried for **reads** only; a write may have landed, so it is never repeated. Keyword Planner is limited to 1 request/s, so run research sequentially.
 - Status: `./run.sh quota`, limits + usage: `./run.sh api-limits`.
 
@@ -219,7 +222,7 @@ The **target account's customer ID** is a positional argument of most commands (
 | Command | Description |
 |--------|-------|
 | `campaigns <cid> [--status]` | List search campaigns |
-| `campaign-create <cid> --name --budget [--bidding] [--target-cpa] [--target-roas] [--geo] [--language]` | New SEARCH campaign + budget + geo/language atomically, **starts PAUSED** (default targeting: Czech Republic + Czech) |
+| `campaign-create <cid> --name --budget [--bidding] [--target-cpa] [--target-roas] [--geo] [--language] [--no-search-partners] [--presence-only]` | New SEARCH campaign + budget + geo/language atomically, **starts PAUSED** (default targeting: Czech Republic + Czech; search partners on and "presence or interest" unless you switch them off) |
 | `campaign-status <cid> <id> --status enabled\|paused\|removed [--force]` | Enable / pause / delete (delete only from PAUSED!) |
 | `bidding-set <cid> <id> --strategy … [--target-cpa] [--target-roas]` | Bidding: `manual_cpc`, `max_conversions`, `max_conversion_value`, `target_cpa`, `target_roas` |
 | `bidding-set <cid> <id> --portfolio <bidding_strategy_id>` | Attach the campaign to an existing portfolio bidding strategy (the target is set on the portfolio) |
@@ -424,7 +427,7 @@ google-ads-app/
 │   ├── lint.py         #   preflight text lint (RSA/assets)
 │   ├── cli.py          #   argparse + dispatch (_cmd = parser + handler in one)
 │   └── commands/       #   one module per domain (campaigns, ads, keywords, …)
-├── tests/              # Offline pytest suite (107 tests)
+├── tests/              # Offline pytest suite (117 tests)
 ├── scripts/check_docs_consistency.py   # CLI ↔ README ↔ CLAUDE.md ↔ skill
 ├── requirements.txt · requirements-dev.txt
 ├── setup.sh · run.sh   # Install / run scripts (activates the venv)

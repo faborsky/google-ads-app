@@ -9,7 +9,7 @@ Tahle složka obsahuje **skill pro Claude Code**, který obaluje CLI aplikaci v 
 1. **Naklonovaný tenhle repozitář** a funkční appka (`./run.sh accounts` vrací tvoje účty).
 2. Nainstalovaný **Claude Code**.
 
-> Získání přístupů (developer token + jeho přístupová úroveň, OAuth klient nebo service account, MCC ID) je u Google Ads složitější než u většiny API — krok za krokem to popisuje hlavní `README.cs.md` → Autentizace. Všechny přístupy patří **výhradně do `.env`** (je v `.gitignore`) — nikdy do kódu, gitu ani chatu; ani Claudovi je neposílej, `auth` je uloží sám.
+> Získání přístupů (přístupová úroveň Cloud projektu — developer tokeny Google 9. 9. 2026 zrušil, OAuth klient nebo service account, MCC ID) je u Google Ads složitější než u většiny API — krok za krokem to popisuje hlavní `README.cs.md` → Autentizace. Všechny přístupy patří **výhradně do `.env`** (je v `.gitignore`) — nikdy do kódu, gitu ani chatu; ani Claudovi je neposílej, `auth` je uloží sám.
 
 ## Krok za krokem
 

@@ -8,7 +8,11 @@ PYTHON="${PYTHON:-python3}"
 echo "==> Creating virtual environment (.venv)"
 "$PYTHON" -m venv .venv
 # shellcheck disable=SC1091
-source .venv/bin/activate
+if [ -f .venv/Scripts/activate ]; then  # Windows (Git Bash): venv uses Scripts/
+  source .venv/Scripts/activate
+else
+  source .venv/bin/activate
+fi
 
 echo "==> Installing dependencies"
 pip install --quiet --upgrade pip

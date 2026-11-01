@@ -1,15 +1,19 @@
 """Engine: credentials, client, quota guard, QPS retry, query & mutation runners.
 
 Auth model (configured via .env) — two alternatives:
-  A) Installed-app OAuth2: developer_token + client_id + client_secret
-     + refresh_token (+ login_customer_id for MCC access). `./run.sh auth`
-     generates the refresh token and writes it into .env.
-  B) Service account: developer_token + GOOGLE_ADS_JSON_KEY_FILE_PATH (the
+  A) Installed-app OAuth2: client_id + client_secret + refresh_token
+     (+ login_customer_id for MCC access). `./run.sh auth` generates the
+     refresh token and writes it into .env.
+  B) Service account: GOOGLE_ADS_JSON_KEY_FILE_PATH (the
      service-account email is added as a user of the Google Ads account in
      Admin → Access and security). No browser flow, no 7-day token expiry.
+  Developer tokens were sunset on 2026-09-09: the access level now belongs to
+  the Google Cloud project (Cloud Console → Google Ads API → Overview) and the
+  API ignores the header. GOOGLE_ADS_DEVELOPER_TOKEN is therefore optional;
+  when set it is still sent (harmless), when empty it is left out.
 
 Quota & rate limits (so the app never gets the account throttled/blocked):
-  - Daily operation quota per developer token: Basic Access = 15 000 ops,
+  - Daily operation quota per Cloud project access level: Basic Access = 15 000 ops,
     Explorer Access = 2 880 ops on production accounts, Standard = unlimited.
     Google measures it over a SLIDING 24-hour window (access-levels docs), not
     a calendar day. A Search/SearchStream request counts as 1 operation
@@ -18,7 +22,7 @@ Quota & rate limits (so the app never gets the account throttled/blocked):
     (the local estimate is always >= reality). We keep a per-account log of
     (timestamp, ops) in .quota/ and HARD-STOP before a call would push the
     last-24-h total over the cap (GOOGLE_ADS_DAILY_OP_CAP).
-  - Per-second rate limits (QPS, metered per CID + developer token, token
+  - Per-second rate limits (QPS, metered per CID + Cloud project (formerly developer token), token
     bucket): the server returns RESOURCE_EXHAUSTED / RESOURCE_TEMPORARILY_-
     EXHAUSTED. We retry those with exponential back-off (honouring Google's
     suggested retry delay). Planning services (Keyword Planner) are
@@ -73,10 +77,12 @@ def _config_dict(account: str | None) -> dict:
     """
     suffix = f"_{account.upper()}" if account and account != "default" else ""
     cfg: dict = {
-        "developer_token": _env("GOOGLE_ADS_DEVELOPER_TOKEN", account),
         "login_customer_id": _env("GOOGLE_ADS_LOGIN_CUSTOMER_ID", account),
         "use_proto_plus": True,
     }
+    developer_token = _env("GOOGLE_ADS_DEVELOPER_TOKEN", account)
+    if developer_token:  # optional since the 2026-09-09 sunset; ignored by the API
+        cfg["developer_token"] = developer_token
     key_file = _env("GOOGLE_ADS_JSON_KEY_FILE_PATH", account)
     if key_file:
         path = Path(os.path.expanduser(key_file))
@@ -88,7 +94,7 @@ def _config_dict(account: str | None) -> dict:
         impersonated = _env("GOOGLE_ADS_IMPERSONATED_EMAIL", account)
         if impersonated:
             cfg["impersonated_email"] = impersonated
-        missing = [] if cfg["developer_token"] else ["GOOGLE_ADS_DEVELOPER_TOKEN"]
+        missing = []
     else:
         cfg.update({
             "client_id": _env("GOOGLE_ADS_CLIENT_ID", account),
@@ -96,7 +102,7 @@ def _config_dict(account: str | None) -> dict:
             "refresh_token": _env("GOOGLE_ADS_REFRESH_TOKEN", account),
         })
         missing = [f"GOOGLE_ADS_{k.upper()}" for k in
-                   ("developer_token", "client_id", "client_secret", "refresh_token")
+                   ("client_id", "client_secret", "refresh_token")
                    if not cfg.get(k)]
     if missing:
         _die(
@@ -278,20 +284,34 @@ def _rate_error_retry_after(ex) -> int | None:
     return None
 
 
+_ACCESS_LEVEL_PAGE = "Cloud Console → Google Ads API → Overview (console.cloud.google.com/google/ads-apis/overview)"
+
 _AUTHZ_HINTS = {
     "DEVELOPER_TOKEN_NOT_APPROVED": (
-        "Developer token má jen Test Account Access — na produkční účet nesmí. "
-        "Požádej o Basic Access v API Center (Tools → API Center), nebo zkoušej na testovacím účtu."),
+        "Přístup jen pro testovací účty — na produkční účet nesmí. Přístupová úroveň dnes patří "
+        f"Cloud projektu (developer tokeny Google zrušil 9. 9. 2026): požádej o Explorer/Basic v {_ACCESS_LEVEL_PAGE}."),
     "CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION": (
-        "Cloud projekt (OAuth klient) není schválený pro produkční účty — viz README.cs.md → "
-        "Autentizace (přístupová úroveň tokenu a Cloud projekt)."),
+        "Cloud projekt (OAuth klient / service account) má jen Test access — na produkční účty "
+        f"požádej o Explorer access v {_ACCESS_LEVEL_PAGE}. Viz README.cs.md → Autentizace."),
     "DEVELOPER_TOKEN_PROHIBITED": (
-        "Developer token je pro tento Cloud projekt zakázaný — každý Cloud projekt smí používat "
-        "jen jeden developer token (vytvoř nový projekt, nebo použij původní token)."),
+        "Developer token je pro tento Cloud projekt zakázaný. Developer tokeny Google 9. 9. 2026 "
+        "zrušil a API je ignoruje — smaž GOOGLE_ADS_DEVELOPER_TOKEN z .env a zkus to znovu."),
     "USER_PERMISSION_DENIED": (
         "Přihlášený uživatel nemá k účtu přístup — zkontroluj GOOGLE_ADS_LOGIN_CUSTOMER_ID (MCC) "
         "a že je účet pod tímhle MCC propojený / uživatel má roli na účtu."),
-    "CUSTOMER_NOT_ENABLED": "Účet není aktivní (zrušený / nedokončená registrace).",
+    "CUSTOMER_NOT_ENABLED": (
+        "Účet není pro API aktivní (zrušený, nebo nedokončená registrace). Účet nově založený "
+        "z MCC se zpřístupní až po dokončení průvodce v rozhraní Google Ads VČETNĚ fakturace "
+        "(průvodce vynutí první kampaň — hned ji pozastav). Čtení pak funguje dřív, zápisy "
+        "ještě chvíli po aktivaci padají na stejnou chybu."),
+}
+
+# Errors whose enum code is generic but whose message is specific.
+_MESSAGE_HINTS = {
+    "explorer access": (
+        "Explorer access blokuje Keyword Planner a další plánovací služby. Požádej o Basic access "
+        f"v {_ACCESS_LEVEL_PAGE} (podmínkou je ověření značky / brand verification Cloud projektu; "
+        "schválení pak trvá minuty)."),
 }
 
 
@@ -310,6 +330,9 @@ def _report_google_ads_exception(ex) -> None:
             code = ""
         if code in _AUTHZ_HINTS:
             hints.append(f"  ↳ {_AUTHZ_HINTS[code]}")
+        for needle, hint in _MESSAGE_HINTS.items():
+            if needle in error.message.lower() and f"  ↳ {hint}" not in hints:
+                hints.append(f"  ↳ {hint}")
     _die("Google Ads API request failed (request_id="
          + f"{ex.request_id}):\n" + "\n".join(msgs + hints))
 

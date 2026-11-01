@@ -1,3 +1,4 @@
-google-ads>=31.4.0,<32
+google-ads>=35.0.0,<36
 python-dotenv>=1.0.0
 google-auth-oauthlib>=1.2.0
+grpcio>=1.83.0

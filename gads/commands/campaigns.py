@@ -166,12 +166,17 @@ def cmd_campaign_create(args: argparse.Namespace) -> None:
     c.campaign_budget = budget_rn
     _apply_bidding(client, c, args.bidding, args.target_cpa, args.target_roas)
     c.network_settings.target_google_search = True
-    c.network_settings.target_search_network = True
+    # Search partners are on by default (Google's own default); --no-search-partners opts out.
+    c.network_settings.target_search_network = not getattr(args, "no_search_partners", False)
     c.network_settings.target_content_network = False
     c.network_settings.target_partner_search_network = False
     c.contains_eu_political_advertising = (
         client.enums.EuPoliticalAdvertisingStatusEnum.DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING
     )
+    if getattr(args, "presence_only", False):
+        # Default is PRESENCE_OR_INTEREST: people merely interested in the location see ads too.
+        c.geo_target_type_setting.positive_geo_target_type = (
+            client.enums.PositiveGeoTargetTypeEnum.PRESENCE)
     ops.append(mo_campaign)
 
     geo_ids = [g.strip() for g in (args.geo or "").split(",") if g.strip()]
@@ -194,6 +199,9 @@ def cmd_campaign_create(args: argparse.Namespace) -> None:
           f"rozpočet {float(args.budget):,.0f} Kč/den, bidding {label}")
     print(f"      geo: {', '.join(geo_ids) or '— (celý svět!)'}  "
           f"jazyk: {', '.join(lang_ids) or '— (všechny!)'}")
+    print(f"      partneři Vyhledávací sítě: "
+          f"{'ne' if getattr(args, 'no_search_partners', False) else 'ano'}  "
+          f"lokalita: {'jen přítomnost' if getattr(args, 'presence_only', False) else 'přítomnost nebo zájem'}")
 
     service = client.get_service("GoogleAdsService")
     request = client.get_type("MutateGoogleAdsRequest")
