@@ -57,6 +57,14 @@ def _style_findings(text: str, *, is_headline: bool) -> list[str]:
     return findings
 
 
+_DKI = re.compile(r"\{keyword:([^}]*)\}", re.IGNORECASE)
+
+
+def _visible_len(text: str) -> int:
+    """Length Google counts: keyword-insertion `{KeyWord:default}` = its default text."""
+    return len(_DKI.sub(r"\1", text))
+
+
 def lint_rsa(headlines: list[str], descriptions: list[str],
              path1: str | None = None, path2: str | None = None) -> None:
     """Hard-fail on count/length violations; print style warnings otherwise."""
@@ -66,10 +74,10 @@ def lint_rsa(headlines: list[str], descriptions: list[str],
     lo, hi = RSA_DESCRIPTIONS_RANGE
     if not (lo <= len(descriptions) <= hi):
         _die(f"RSA potřebuje {lo}–{hi} descriptions (máš {len(descriptions)}).")
-    too_long = [t for t in headlines if len(t) > RSA_HEADLINE_MAX]
+    too_long = [t for t in headlines if _visible_len(t) > RSA_HEADLINE_MAX]
     if too_long:
         _die(f"Headlines max {RSA_HEADLINE_MAX} znaků, překračují: {too_long}")
-    too_long = [t for t in descriptions if len(t) > RSA_DESCRIPTION_MAX]
+    too_long = [t for t in descriptions if _visible_len(t) > RSA_DESCRIPTION_MAX]
     if too_long:
         _die(f"Descriptions max {RSA_DESCRIPTION_MAX} znaků, překračují: {too_long}")
     for p, name in ((path1, "path1"), (path2, "path2")):
