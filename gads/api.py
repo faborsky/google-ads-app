@@ -1,12 +1,19 @@
 """Engine: credentials, client, quota guard, QPS retry, query & mutation runners.
 
-Auth model (configured via .env) — two alternatives:
+Auth model (configured via .env) — three alternatives:
   A) Installed-app OAuth2: client_id + client_secret + refresh_token
      (+ login_customer_id for MCC access). `./run.sh auth` generates the
      refresh token and writes it into .env.
   B) Service account: GOOGLE_ADS_JSON_KEY_FILE_PATH (the
      service-account email is added as a user of the Google Ads account in
      Admin → Access and security). No browser flow, no 7-day token expiry.
+  C) Keyless service account: GOOGLE_ADS_IMPERSONATE_SERVICE_ACCOUNT
+     (+ optional GOOGLE_ADS_GCLOUD_ACCOUNT). Short-lived tokens come from
+     `gcloud auth print-access-token --impersonate-service-account`, so no key
+     file and no refresh token exist anywhere — for organisations that forbid
+     service-account keys (iam.disableServiceAccountKeyCreation) and accounts
+     where the OAuth flow demands a passkey the user does not have.
+
   Developer tokens were sunset on 2026-09-09: the access level now belongs to
   the Google Cloud project (Cloud Console → Google Ads API → Overview) and the
   API ignores the header. GOOGLE_ADS_DEVELOPER_TOKEN is therefore optional;
@@ -30,8 +37,10 @@ Quota & rate limits (so the app never gets the account throttled/blocked):
 """
 from __future__ import annotations
 
+import datetime
 import json
 import os
+import subprocess
 import tempfile
 import time
 from pathlib import Path
@@ -84,7 +93,11 @@ def _config_dict(account: str | None) -> dict:
     if developer_token:  # optional since the 2026-09-09 sunset; ignored by the API
         cfg["developer_token"] = developer_token
     key_file = _env("GOOGLE_ADS_JSON_KEY_FILE_PATH", account)
-    if key_file:
+    if _env("GOOGLE_ADS_IMPERSONATE_SERVICE_ACCOUNT", account):
+        # Keyless mode: credentials are built in _get_client, only the shared
+        # keys matter here.
+        missing = []
+    elif key_file:
         path = Path(os.path.expanduser(key_file))
         if not path.is_absolute():
             path = BASE_DIR / path
@@ -119,6 +132,53 @@ def _config_dict(account: str | None) -> dict:
     return cfg
 
 
+class _GcloudImpersonatedCredentials:
+    """google-auth credentials that mint 1-hour service-account tokens through
+    the local gcloud login (`--impersonate-service-account`). The caller needs
+    roles/iam.serviceAccountTokenCreator on the service account; nothing secret
+    is written to disk by this app."""
+
+    def __new__(cls, *args, **kwargs):
+        # Defer the google.auth import so the CLI starts without it in OAuth mode.
+        from google.auth import credentials as ga_credentials
+
+        class _Impl(ga_credentials.Credentials):
+            def __init__(self, service_account: str, gcloud_account: str | None, scopes: list[str]):
+                super().__init__()
+                self._service_account = service_account
+                self._gcloud_account = gcloud_account
+                self._scopes = scopes
+
+            def refresh(self, request) -> None:
+                from google.auth.exceptions import RefreshError
+
+                cmd = [
+                    "gcloud", "auth", "print-access-token",
+                    f"--impersonate-service-account={self._service_account}",
+                    "--scopes=" + ",".join(self._scopes),
+                ]
+                if self._gcloud_account:
+                    cmd.append(f"--account={self._gcloud_account}")
+                try:
+                    done = subprocess.run(cmd, capture_output=True, text=True, timeout=120, check=False)
+                except (OSError, subprocess.TimeoutExpired) as ex:
+                    raise RefreshError(f"gcloud se nepodařilo spustit: {ex}") from None
+                token = done.stdout.strip()
+                if done.returncode != 0 or not token:
+                    reason = "Reauthentication" if "Reauthentication" in done.stderr else "jiná chyba"
+                    raise RefreshError(
+                        f"gcloud nevydal token pro {self._service_account} ({reason}). "
+                        f"Spusť `gcloud auth login {self._gcloud_account or ''} --no-activate`."
+                    )
+                self.token = token
+                self.expiry = (
+                    datetime.datetime.now(datetime.UTC).replace(tzinfo=None)
+                    + datetime.timedelta(minutes=50)
+                )
+
+        return _Impl(*args, **kwargs)
+
+
 def _get_client(account: str | None):
     """Build the GoogleAdsClient — with clean, actionable errors instead of
     tracebacks for the classic first-contact failures (expired refresh token,
@@ -130,6 +190,18 @@ def _get_client(account: str | None):
     from google.auth.exceptions import GoogleAuthError, RefreshError
 
     cfg = _config_dict(account)
+    impersonate = _env("GOOGLE_ADS_IMPERSONATE_SERVICE_ACCOUNT", account)
+    if impersonate:
+        creds = _GcloudImpersonatedCredentials(
+            impersonate, _env("GOOGLE_ADS_GCLOUD_ACCOUNT", account), SCOPES
+        )
+        return GoogleAdsClient(
+            credentials=creds,
+            developer_token=cfg.get("developer_token"),
+            login_customer_id=cfg.get("login_customer_id"),
+            version=API_VERSION,
+            use_proto_plus=True,
+        )
     try:
         return GoogleAdsClient.load_from_dict(cfg, version=API_VERSION)
     except RefreshError as ex:

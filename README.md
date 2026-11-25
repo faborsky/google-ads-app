@@ -146,6 +146,14 @@ The Google Ads API can authenticate a **service account directly**, without Work
 
 Upsides: nothing expires, access doesn't hang on your personal login, and it suits crons and agents. The key is a password; never commit it.
 
+**Without a key file (organisations that forbid service-account keys).** Workspace organisations often enforce the policy `constraints/iam.disableServiceAccountKeyCreation`, so step 1 fails. The app can then borrow short-lived tokens from your own `gcloud` login instead:
+
+1. Create the service account (no key) and add its email in Google Ads as in step 2. Google offers at most the Standard role for a service account.
+2. Enable `iamcredentials.googleapis.com` in the Cloud project and give your own Google user the **Service Account Token Creator** role on that service account.
+3. `gcloud auth login` once, then in `.env`: `GOOGLE_ADS_IMPERSONATE_SERVICE_ACCOUNT=<service-account email>` (+ `GOOGLE_ADS_LOGIN_CUSTOMER_ID`; optionally `GOOGLE_ADS_GCLOUD_ACCOUNT=<your gcloud account>` when you have several). No key file, no OAuth client, no refresh token.
+
+The app calls `gcloud auth print-access-token --impersonate-service-account=…` whenever it needs a token (valid ~1 hour). Nothing secret is written to disk by the app; access ends when you remove the Token Creator role.
+
 > Every value in `.env` is a password to your ad accounts. It goes **into `.env` only** (it's in `.gitignore`), never into code, git or a chat.
 
 ### Test account (optional sandbox)

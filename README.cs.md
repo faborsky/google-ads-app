@@ -146,6 +146,14 @@ Google Ads API umí ověřit **service account přímo**, bez Workspace i bez do
 
 Výhody: nic neexpiruje, přístup nevisí na tvém osobním loginu, hodí se pro crony a agenty. Klíč je heslo, nikdy ho nedávej do gitu.
 
+**Bez souboru s klíčem (organizace, které klíče k servisním účtům zakazují).** Workspace organizace často mají politiku `constraints/iam.disableServiceAccountKeyCreation`, takže krok 1 neprojde. Appka si pak umí půjčovat krátkodobé tokeny přes tvoje vlastní přihlášení v `gcloud`:
+
+1. Založ service account (bez klíče) a jeho e-mail přidej v Google Ads jako v kroku 2. Servisnímu účtu Google nabízí nejvýš roli Standardní.
+2. V Cloud projektu zapni `iamcredentials.googleapis.com` a svému Google uživateli dej na ten service account roli **Service Account Token Creator**.
+3. Jednou `gcloud auth login`, pak do `.env`: `GOOGLE_ADS_IMPERSONATE_SERVICE_ACCOUNT=<e-mail service accountu>` (+ `GOOGLE_ADS_LOGIN_CUSTOMER_ID`; volitelně `GOOGLE_ADS_GCLOUD_ACCOUNT=<tvůj účet v gcloud>`, když jich máš víc). Žádný klíč, OAuth klient ani refresh token.
+
+Appka volá `gcloud auth print-access-token --impersonate-service-account=…`, kdykoli potřebuje token (platí asi hodinu). Sama nic tajného na disk neukládá; přístup skončí odebráním role Token Creator.
+
 > Všechny hodnoty v `.env` jsou hesla k tvým reklamním účtům. Patří **výhradně do `.env`** (je v `.gitignore`), nikdy do kódu, gitu ani chatu.
 
 ### Testovací účet (volitelný sandbox)
